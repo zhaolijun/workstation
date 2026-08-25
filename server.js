@@ -1,29 +1,36 @@
-/* G3 Workstation backend: Express + MySQL (kv JSON document store) */
+/* G3 Workstation backend: Express + SQLite (kv JSON document store) */
 const express = require('express');
 const path = require('path');
-const mysql = require('mysql2/promise');
+const fs = require('fs');
+const Database = require('better-sqlite3');
 
 const PORT = process.env.PORT || 3000;
-const DB = {
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASS || 'g3password',
-  database: process.env.DB_NAME || 'g3_workspace',
-  charset: 'utf8mb4'
-};
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data.sqlite');
 
 const KEYS = ['subjects','homework','recites','mistakes','points','streak','lastActive','days','tomato','sampleDone','eyeOn'];
 
-const pool = mysql.createPool(Object.assign({ connectionLimit: 5, supportBigNumbers: true }, DB));
+fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
+const db = new Database(DB_FILE);
+db.pragma('journal_mode = WAL');
+db.exec(`CREATE TABLE IF NOT EXISTS kv_store (
+  k TEXT PRIMARY KEY,
+  v TEXT NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+)`);
+
+const selectAll = db.prepare('SELECT k, v FROM kv_store');
+const upsert = db.prepare(
+  'INSERT INTO kv_store (k, v, updated_at) VALUES (?, ?, strftime(\'%s\',\'now\')) ' +
+  'ON CONFLICT(k) DO UPDATE SET v=excluded.v, updated_at=excluded.updated_at'
+);
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/api/data', async (req, res) => {
+app.get('/api/data', (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT k, v FROM kv_store');
+    const rows = selectAll.all();
     const map = {};
     for (const r of rows) { try { map[r.k] = JSON.parse(r.v); } catch (e) {} }
     const out = {};
@@ -35,14 +42,11 @@ app.get('/api/data', async (req, res) => {
   }
 });
 
-app.post('/api/data/:key', async (req, res) => {
+app.post('/api/data/:key', (req, res) => {
   const k = req.params.key;
   if (!KEYS.includes(k)) return res.status(400).json({ error: 'bad_key' });
   try {
-    await pool.query(
-      'INSERT INTO kv_store (k, v) VALUES (?, ?) ON DUPLICATE KEY UPDATE v = VALUES(v)',
-      [k, JSON.stringify(req.body)]
-    );
+    upsert.run(k, JSON.stringify(req.body));
     res.json({ ok: true });
   } catch (e) {
     console.error(e);
@@ -50,4 +54,4 @@ app.post('/api/data/:key', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`g3-workstation listening on :${PORT}`));
+app.listen(PORT, () => console.log(`g3-workstation listening on :${PORT} (sqlite: ${DB_FILE})`));
