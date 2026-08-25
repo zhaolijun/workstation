@@ -7,7 +7,7 @@ const Database = require('better-sqlite3');
 const PORT = process.env.PORT || 3000;
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data.sqlite');
 
-const KEYS = ['subjects','homework','recites','mistakes','points','streak','lastActive','days','tomato','sampleDone','eyeOn'];
+const KEYS = ['subjects','homework','recites','mistakes','points','streak','lastActive','days','tomato','sampleDone','eyeOn','pwdHash'];
 
 fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
 const db = new Database(DB_FILE);

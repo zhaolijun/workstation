@@ -7,8 +7,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#8fc9a8">
-<title>我的学习小天地 · 三年级</title>
-<!-- 数据存储在服务器 MySQL 数据库，通过 /api/data 接口读写；无外部 CDN，离线仅静态页面缓存 -->
+<title>沐沐学习乐园 · 三年级</title>
+<!-- 数据存储在服务器 SQLite（data.sqlite），通过 /api/data 接口读写；无外部 CDN -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
@@ -29,11 +29,18 @@ input,select,textarea{font-family:inherit;font-size:17px;color:var(--ink)}
 
 /* ===== 顶栏 ===== */
 .topbar{
+  position:relative;
   background:linear-gradient(135deg,#8fc9a8,#7fb2dd);
-  padding:18px 16px 14px;color:#fff;border-radius:0 0 24px 24px;
+  background-image:linear-gradient(135deg,rgba(143,201,168,.55),rgba(127,178,221,.55)),url('header-bg.jpg');
+  background-size:cover;background-position:center 30%;
+  padding:22px 16px 18px;color:#fff;border-radius:0 0 24px 24px;
   display:flex;align-items:center;justify-content:space-between;gap:10px;
   box-shadow:0 4px 14px rgba(120,160,130,.25);
+  text-shadow:0 1px 6px rgba(50,70,55,.45);
+  min-height:120px;
 }
+@media(min-width:768px){.topbar{min-height:180px;padding:28px 24px 22px}}
+@media(min-width:1024px){.topbar{min-height:220px}}
 .topbar h1{font-size:20px;letter-spacing:1px}
 .topbar .date{font-size:13px;opacity:.9;margin-top:2px}
 .icon-btn{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.25);
@@ -201,8 +208,12 @@ input,select,textarea{font-family:inherit;font-size:17px;color:var(--ink)}
 .pc-add svg{width:28px;height:28px;fill:#fff}
 
 @media(min-width:768px){
-  body{max-width:640px;margin:0 auto}
+  body{max-width:760px;margin:0 auto}
   .topbar{border-radius:0 0 28px 28px}
+}
+@media(min-width:1024px){
+  body{max-width:860px}
+  .bottom-nav{max-width:860px;left:50%;transform:translateX(-50%);border-radius:20px 20px 0 0}
 }
 </style>
 </head>
@@ -211,7 +222,7 @@ input,select,textarea{font-family:inherit;font-size:17px;color:var(--ink)}
 <!-- 顶栏 -->
 <div class="topbar">
   <div>
-    <h1>我的学习小天地</h1>
+    <h1>沐沐学习乐园</h1>
     <div class="date" id="todayDate"></div>
   </div>
   <button class="icon-btn" id="settingsBtn" aria-label="设置">
@@ -510,15 +521,37 @@ input,select,textarea{font-family:inherit;font-size:17px;color:var(--ink)}
   </div>
 </div>
 
+<!-- 设置密码（家长锁） -->
+<div class="mask hidden modal-center" id="pwdMask">
+  <div class="modal-box">
+    <h3 id="pwdTitle">输入家长密码</h3>
+    <p id="pwdSub">进入设置前需要输入 4 位数字密码</p>
+    <div class="form-row" style="text-align:left">
+      <input id="pwdInput" type="password" inputmode="numeric" maxlength="8" placeholder="4-8位数字"
+        style="font-size:22px;letter-spacing:6px;text-align:center">
+    </div>
+    <div class="form-row hidden" id="pwdConfirmRow" style="text-align:left">
+      <input id="pwdConfirm" type="password" inputmode="numeric" maxlength="8" placeholder="再输入一遍确认"
+        style="font-size:22px;letter-spacing:6px;text-align:center">
+    </div>
+    <div class="row">
+      <button class="big-btn btn-gray" id="pwdCancel">取消</button>
+      <button class="big-btn btn-green" id="pwdOk">确定</button>
+    </div>
+    <p style="font-size:12px;color:var(--ink-soft);margin-top:12px;margin-bottom:0">
+      密码只是防止小朋友误操作，不是真正的加密哦
+    </p>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-/* ================= 数据层（仅 localStorage，完全离线） ================= */
-/* ================= 数据层（MySQL via /api/data，localStorage 仅作网络失败兜底） ================= */
-var KEYS = ['subjects','homework','recites','mistakes','points','streak','lastActive','days','tomato','sampleDone','eyeOn'];
+/* ================= 数据层（SQLite via /api/data，localStorage 仅作网络失败兜底） ================= */
+var KEYS = ['subjects','homework','recites','mistakes','points','streak','lastActive','days','tomato','sampleDone','eyeOn','pwdHash'];
 var DEFAULTS = {
   subjects: ['语文','数学','英语'], homework: [], recites: [], mistakes: [],
-  points: 0, streak: 0, lastActive: null, days: {}, tomato: {}, sampleDone: false, eyeOn: true
+  points: 0, streak: 0, lastActive: null, days: {}, tomato: {}, sampleDone: false, eyeOn: true, pwdHash: null
 };
 var data = JSON.parse(JSON.stringify(DEFAULTS));
 
@@ -1022,16 +1055,52 @@ $('eyeToggle').addEventListener('click',function(){
   toast(data.eyeOn?'护眼提醒已开启':'护眼提醒已关闭');
 });
 
+/* ================= 家长密码（设置页门锁） ================= */
+function hashStr(s){
+  var h=0x811c9dc5; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=(h*0x01000193)>>>0; }
+  return 'h'+h.toString(16);
+}
+function showPwdGate(){
+  var needCreate = !data.pwdHash;
+  $('pwdTitle').textContent = needCreate ? '设置家长密码' : '输入家长密码';
+  $('pwdSub').textContent = needCreate
+    ? '首次进入设置，请先设置一个 4-8 位数字密码（家长专用）'
+    : '进入设置前需要输入家长密码';
+  $('pwdConfirmRow').classList.toggle('hidden', !needCreate);
+  $('pwdInput').value=''; $('pwdConfirm').value='';
+  openMask('pwdMask');
+  setTimeout(function(){ $('pwdInput').focus(); }, 80);
+}
+$('pwdCancel').addEventListener('click',function(){ closeMask('pwdMask'); });
+$('pwdOk').addEventListener('click',function(){
+  var v = $('pwdInput').value.trim();
+  if(!/^\d{4,8}$/.test(v)){ toast('密码需要是 4-8 位数字'); return; }
+  if(!data.pwdHash){
+    var c = $('pwdConfirm').value.trim();
+    if(v!==c){ toast('两次输入不一致'); return; }
+    data.pwdHash = hashStr(v); persist();
+    closeMask('pwdMask'); toast('家长密码设置成功');
+    $('eyeToggle').textContent = data.eyeOn ? '护眼提醒：开（每20分钟）' : '护眼提醒：关';
+    openMask('settingsMask');
+  } else {
+    if(hashStr(v) !== data.pwdHash){ toast('密码错误'); $('pwdInput').value=''; return; }
+    closeMask('pwdMask');
+    $('eyeToggle').textContent = data.eyeOn ? '护眼提醒：开（每20分钟）' : '护眼提醒：关';
+    openMask('settingsMask');
+  }
+});
+$('pwdInput').addEventListener('keydown',function(e){ if(e.key==='Enter') $('pwdOk').click(); });
+$('pwdConfirm').addEventListener('keydown',function(e){ if(e.key==='Enter') $('pwdOk').click(); });
+
 /* ================= 备份 / 清理 ================= */
 $('settingsBtn').addEventListener('click',function(){
-  $('eyeToggle').textContent = data.eyeOn ? '护眼提醒：开（每20分钟）' : '护眼提醒：关';
-  openMask('settingsMask');
+  showPwdGate();
 });
 $('exportBtn').addEventListener('click',function(){
   var blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = '学习小天地备份_'+todayStr()+'.json';
+  a.download = '沐沐学习乐园备份_'+todayStr()+'.json';
   a.click(); URL.revokeObjectURL(a.href);
   toast('备份文件已下载');
 });
@@ -1065,7 +1134,7 @@ $('clearAll').addEventListener('click',function(){
     Object.keys(localStorage).filter(function(k){return k.indexOf('wb_g3_')===0;})
       .forEach(function(k){ localStorage.removeItem(k); });
     data = { subjects:['语文','数学','英语'], homework:[], recites:[], mistakes:[],
-      points:0, streak:0, lastActive:null, days:{}, tomato:{}, sampleDone:true, eyeOn:true };
+      points:0, streak:0, lastActive:null, days:{}, tomato:{}, sampleDone:true, eyeOn:true, pwdHash:null };
     persist(); closeMask('settingsMask'); refreshAll(); toast('已全部清空');
   });
 });
