@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#8fc9a8">
+<title>我的学习小天地 · 三年级</title>
+<!-- 数据存储在服务器 MySQL 数据库，通过 /api/data 接口读写；无外部 CDN，离线仅静态页面缓存 -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#f4f7ef; --card:#ffffff; --ink:#3a4a3f; --ink-soft:#7a8a7e;
+  --green:#7cbf92; --green-deep:#5aa673; --blue:#7fb2dd; --yellow:#f5c869;
+  --red:#f08c8c; --red-bg:#fdecec; --line:#e6ece2;
+  --radius:18px; --shadow:0 2px 10px rgba(90,120,90,.08);
+}
+html{font-size:17px}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--ink);min-height:100vh;
+  padding-bottom:calc(76px + env(safe-area-inset-bottom));
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:17px;color:var(--ink)}
+.hidden{display:none!important}
+
+/* ===== 顶栏 ===== */
+.topbar{
+  background:linear-gradient(135deg,#8fc9a8,#7fb2dd);
+  padding:18px 16px 14px;color:#fff;border-radius:0 0 24px 24px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  box-shadow:0 4px 14px rgba(120,160,130,.25);
+}
+.topbar h1{font-size:20px;letter-spacing:1px}
+.topbar .date{font-size:13px;opacity:.9;margin-top:2px}
+.icon-btn{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.25);
+  display:flex;align-items:center;justify-content:center;flex:none}
+.icon-btn svg{width:24px;height:24px;fill:#fff}
+
+/* ===== 积分条 ===== */
+.scorebar{display:flex;gap:10px;margin:14px 14px 0}
+.score-card{flex:1;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:12px 8px;text-align:center}
+.score-card .num{font-size:24px;font-weight:800;color:var(--green-deep)}
+.score-card .lab{font-size:12px;color:var(--ink-soft);margin-top:2px}
+.score-card.star .num{color:#e59a2f}
+
+/* ===== 今天板块 ===== */
+.section{margin:16px 14px 0}
+.section-title{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;margin-bottom:10px}
+.section-title svg{width:20px;height:20px;fill:var(--green-deep)}
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px}
+.empty-note{color:var(--ink-soft);font-size:14px;text-align:center;padding:14px 0}
+
+.todo-item{display:flex;align-items:center;gap:10px;padding:12px 10px;border-radius:14px;
+  background:#f7f9f4;margin-bottom:8px}
+.todo-item.overdue{background:var(--red-bg)}
+.todo-item .txt{flex:1;font-size:15px;line-height:1.4}
+.todo-item .tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#e3eefb;color:#4a7fae;flex:none}
+.todo-item .tag.late{background:#fbd9d9;color:#c04a4a}
+.todo-item .tag.recite-tag{background:#fdeec9;color:#a97b1e}
+.big-btn{min-height:48px;padding:0 18px;border-radius:14px;font-size:15px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.big-btn svg{width:18px;height:18px;fill:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-gray{background:#e8ece4;color:var(--ink-soft)}
+
+/* ===== 打卡区 ===== */
+.checkin-row{display:flex;gap:10px;margin-top:4px}
+.checkin-btn{flex:1;min-height:56px;border-radius:16px;font-size:15px;font-weight:700;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  background:#eef5ee;color:var(--green-deep);border:2px dashed #bcd8c2}
+.checkin-btn.done{background:var(--green);color:#fff;border-style:solid;border-color:var(--green)}
+.checkin-btn:disabled{opacity:.55}
+.checkin-btn .sub{font-size:11px;font-weight:400;opacity:.85}
+.checkin-btn.done .sub{color:#eafaf0}
+
+/* ===== 周报 ===== */
+.week-table{width:100%;border-collapse:collapse;font-size:13px}
+.week-table th{color:var(--ink-soft);font-weight:600;padding:6px 4px;text-align:center;border-bottom:1px solid var(--line)}
+.week-table td{padding:8px 4px;text-align:center;border-bottom:1px dashed var(--line)}
+.week-table tr:last-child td{border-bottom:none}
+
+/* ===== 主内容页 ===== */
+.page{display:none;padding:2px 0}
+.page.active{display:block}
+
+/* ===== 作业 ===== */
+.subj-chips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 14px 0}
+.chip{min-height:42px;padding:0 16px;border-radius:999px;background:#fff;box-shadow:var(--shadow);
+  font-size:15px;display:flex;align-items:center;color:var(--ink-soft)}
+.chip.on{background:var(--green);color:#fff;font-weight:700}
+.chip.add{border:2px dashed #bcd8c2;color:var(--green-deep)}
+.hw-item{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:14px;margin:10px 14px 0}
+.hw-item.overdue{box-shadow:0 0 0 2px var(--red) inset, var(--shadow);background:#fffafa}
+.hw-head{display:flex;align-items:center;gap:10px}
+.hw-check{width:44px;height:44px;border-radius:50%;border:3px solid #cfddd2;flex:none;
+  display:flex;align-items:center;justify-content:center;background:#fff}
+.hw-check svg{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.hw-check.checked{background:var(--green);border-color:var(--green)}
+.hw-title{flex:1;font-size:16px;font-weight:600;line-height:1.4}
+.hw-item.done .hw-title{color:var(--ink-soft);text-decoration:line-through}
+.hw-meta{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--ink-soft);flex-wrap:wrap}
+.hw-meta .subj{background:#e3eefb;color:#4a7fae;padding:2px 10px;border-radius:999px;font-size:12px}
+.hw-meta .late{color:#c04a4a;font-weight:700}
+.sub-list{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}
+.sub-row{display:flex;align-items:center;gap:8px;padding:8px 2px;font-size:15px}
+.sub-row .dot{width:30px;height:30px;border-radius:50%;border:2px solid #cfddd2;flex:none;
+  display:flex;align-items:center;justify-content:center}
+.sub-row .dot svg{width:14px;height:14px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round}
+.sub-row .dot.on{background:var(--blue);border-color:var(--blue)}
+.sub-row.done span{color:var(--ink-soft);text-decoration:line-through}
+.hw-del{margin-left:auto;color:#d7a0a0;font-size:13px;min-height:36px;padding:0 8px}
+
+/* ===== 背诵 ===== */
+.recite-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:16px;margin:10px 14px 0}
+.recite-card .r-type{font-size:12px;padding:3px 12px;border-radius:999px;background:#fdeec9;color:#a97b1e}
+.recite-card h3{font-size:17px;margin:8px 0 4px}
+.recite-card .r-content{color:var(--ink-soft);font-size:14px;line-height:1.6;white-space:pre-wrap}
+.recite-card .r-stage{font-size:12px;color:var(--ink-soft);margin-top:8px}
+.recite-card .r-actions{display:flex;gap:10px;margin-top:12px}
+.recite-card .r-actions .big-btn{flex:1}
+.recite-done-badge{color:var(--green-deep);font-weight:700;font-size:14px;margin-top:10px}
+
+/* ===== 错题 ===== */
+.mk-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;margin:10px 14px 0}
+.mk-q{font-size:15px;font-weight:600;line-height:1.5}
+.mk-a{font-size:14px;color:var(--ink-soft);margin-top:8px;background:#f7f9f4;border-radius:10px;padding:8px 10px}
+.mk-a.blur{filter:blur(6px);user-select:none}
+.mk-foot{display:flex;align-items:center;gap:8px;margin-top:10px}
+.mk-state{font-size:12px;padding:3px 12px;border-radius:999px}
+.mk-state.no{background:#fdecec;color:#c04a4a}
+.mk-state.yes{background:#e3f3e8;color:var(--green-deep)}
+
+/* ===== 专注计时 ===== */
+.timer-wrap{margin:20px 14px 0;background:var(--card);border-radius:24px;box-shadow:var(--shadow);
+  padding:28px 20px;text-align:center}
+.timer-mode{display:inline-flex;background:#eef3ea;border-radius:999px;padding:4px;margin-bottom:18px}
+.timer-mode button{min-height:44px;padding:0 20px;border-radius:999px;font-size:15px;color:var(--ink-soft)}
+.timer-mode button.on{background:var(--green);color:#fff;font-weight:700}
+.timer-ring{position:relative;width:230px;height:230px;margin:0 auto}
+.timer-ring svg{transform:rotate(-90deg)}
+.timer-ring .time{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.timer-ring .time b{font-size:44px;color:var(--ink)}
+.timer-ring .time span{font-size:13px;color:var(--ink-soft);margin-top:4px}
+.timer-btns{display:flex;gap:12px;justify-content:center;margin-top:22px}
+.timer-count{font-size:13px;color:var(--ink-soft);margin-top:16px}
+
+/* ===== 底部导航 ===== */
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;background:#fff;
+  display:flex;border-top:1px solid var(--line);
+  padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:50;
+  box-shadow:0 -2px 12px rgba(90,120,90,.08)}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  min-height:56px;justify-content:center;color:var(--ink-soft);font-size:11px;border-radius:14px}
+.nav-item svg{width:26px;height:26px;fill:currentColor}
+.nav-item.on{color:var(--green-deep);font-weight:700}
+
+/* ===== 弹层 ===== */
+.mask{position:fixed;inset:0;background:rgba(60,70,60,.45);z-index:100;
+  display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:#fff;width:100%;max-width:560px;border-radius:24px 24px 0 0;
+  padding:20px 18px calc(20px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto}
+.sheet h2{font-size:18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+.sheet .close-x{width:44px;height:44px;border-radius:12px;background:#f0f4ee;display:flex;align-items:center;justify-content:center}
+.sheet .close-x svg{width:20px;height:20px;fill:var(--ink-soft)}
+.form-row{margin-bottom:14px}
+.form-row label{display:block;font-size:14px;font-weight:600;margin-bottom:6px;color:var(--ink)}
+.form-row input,.form-row select,.form-row textarea{width:100%;min-height:50px;border:2px solid var(--line);
+  border-radius:14px;padding:10px 14px;background:#fafbf7;outline:none}
+.form-row input:focus,.form-row select:focus,.form-row textarea:focus{border-color:var(--green)}
+.form-row textarea{min-height:80px;resize:vertical}
+.sheet .big-btn{width:100%;min-height:54px;font-size:17px;border-radius:16px}
+
+.modal-center{align-items:center;padding:20px}
+.modal-box{background:#fff;border-radius:22px;padding:24px 20px;width:100%;max-width:400px;text-align:center}
+.modal-box h3{font-size:18px;margin-bottom:10px}
+.modal-box p{font-size:14px;color:var(--ink-soft);line-height:1.6;margin-bottom:18px}
+.modal-box .row{display:flex;gap:10px}
+.modal-box .big-btn{flex:1}
+.btn-red{background:var(--red);color:#fff}
+
+/* 护眼提醒 */
+.eye-modal .mascot{width:90px;height:90px;margin:0 auto 12px}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);
+  background:#3a4a3f;color:#fff;padding:12px 22px;border-radius:999px;font-size:14px;
+  z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+
+.pc-add{position:fixed;right:18px;bottom:calc(96px + env(safe-area-inset-bottom));
+  width:60px;height:60px;border-radius:50%;background:var(--green);box-shadow:0 6px 18px rgba(90,166,115,.4);
+  display:flex;align-items:center;justify-content:center;z-index:60}
+.pc-add svg{width:28px;height:28px;fill:#fff}
+
+@media(min-width:768px){
+  body{max-width:640px;margin:0 auto}
+  .topbar{border-radius:0 0 28px 28px}
+}
+</style>
+</head>
+<body>
+
+<!-- 顶栏 -->
+<div class="topbar">
+  <div>
+    <h1>我的学习小天地</h1>
+    <div class="date" id="todayDate"></div>
+  </div>
+  <button class="icon-btn" id="settingsBtn" aria-label="设置">
+    <svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6a.5.5 0 0 0 .1-.7l-2-3.4a.5.5 0 0 0-.7-.2l-2.4 1a7.4 7.4 0 0 0-1.7-1L14.5 2.5a.5.5 0 0 0-.6-.4h-4a.5.5 0 0 0-.5.4l-.3 2.6a7.4 7.4 0 0 0-1.7 1l-2.4-1a.5.5 0 0 0-.7.2l-2 3.4a.5.5 0 0 0 .1.7L4.5 11a7.5 7.5 0 0 0 0 2l-2 1.6a.5.5 0 0 0-.1.7l2 3.4c.1.2.4.3.7.2l2.4-1a7.4 7.4 0 0 0 1.7 1l.3 2.6c.1.2.3.4.5.4h4c.3 0 .5-.2.6-.4l.3-2.6a7.4 7.4 0 0 0 1.7-1l2.4 1c.3.1.6 0 .7-.2l2-3.4a.5.5 0 0 0-.1-.7L19.4 13zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
+  </button>
+</div>
+
+<!-- 积分条 -->
+<div class="scorebar">
+  <div class="score-card star"><div class="num" id="scoreNum">0</div><div class="lab">我的积分</div></div>
+  <div class="score-card"><div class="num" id="streakNum">0</div><div class="lab">连续打卡(天)</div></div>
+  <div class="score-card"><div class="num" id="doneNum">0</div><div class="lab">今日已完成</div></div>
+</div>
+
+<!-- 首页：今天要处理 -->
+<div class="page active" id="page-home">
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 10.6l4.2 2.5-.8 1.3L11 13.5V7h2z"/></svg>
+      今天要处理
+    </div>
+    <div class="card" id="todayList"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M12 2l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 8.3l6.1-.7z"/></svg>
+      今日打卡
+    </div>
+    <div class="card">
+      <div class="checkin-row">
+        <button class="checkin-btn" id="ckHw">作业打卡<span class="sub">完成全部作业 +2分</span></button>
+        <button class="checkin-btn" id="ckRc">背诵打卡<span class="sub">完成背诵复习 +2分</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm2 4h10v2H7zm0 4h10v2H7zm0 4h6v2H7z"/></svg>
+      本周小报告
+    </div>
+    <div class="card">
+      <table class="week-table">
+        <thead><tr><th>日期</th><th>作业</th><th>背诵</th><th>积分</th></tr></thead>
+        <tbody id="weekBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 作业页 -->
+<div class="page" id="page-hw">
+  <div class="subj-chips" id="subjChips"></div>
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M16.7 3.3l4 4L8 15l-4.7.7L4 11zm2.1-2.1l-1 .8 4 4 1-.8a1.4 1.4 0 0 0 0-2l-2-2a1.4 1.4 0 0 0-2 0z"/></svg>
+      我的作业
+    </div>
+    <div id="hwList"></div>
+    <div class="empty-note hidden" id="hwEmpty">这个科目还没有作业，点右下角绿色按钮添加吧</div>
+  </div>
+</div>
+
+<!-- 背诵页 -->
+<div class="page" id="page-recite">
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M4 3h13a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6.5A2.5 2.5 0 0 1 4 18.5zM8 7h8V5H8zm10 12V5.5M7 3v18" stroke-width="0"/><path d="M17 3H6.5A2.5 2.5 0 0 0 4 5.5v13A2.5 2.5 0 0 0 6.5 21H19a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zM6.5 5H18v11H6.5a2.4 2.4 0 0 0-.5.05V5.5A.5.5 0 0 1 6.5 5zM8 8h8v2H8zm0 4h6v2H8z"/></svg>
+      背诵复习 <span style="font-size:12px;color:var(--ink-soft);font-weight:400">(第1天 / 第3天 / 第7天 各复习一次)</span>
+    </div>
+    <div id="reciteList"></div>
+    <div class="empty-note hidden" id="reciteEmpty">还没有背诵内容，点右下角绿色按钮添加吧</div>
+  </div>
+</div>
+
+<!-- 错题页 -->
+<div class="page" id="page-mk">
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm5 13.6L15.6 17 12 13.4 8.4 17 7 15.6 10.6 12 7 8.4 8.4 7 12 10.6 15.6 7 17 8.4 13.4 12z"/></svg>
+      错题本
+    </div>
+    <div id="mkList"></div>
+    <div class="empty-note hidden" id="mkEmpty">错题本空空的，真棒！做错题时再记录吧</div>
+  </div>
+</div>
+
+<!-- 专注页 -->
+<div class="page" id="page-focus">
+  <div class="timer-wrap">
+    <div class="timer-mode">
+      <button id="modeWork" class="on">学习 20分钟</button>
+      <button id="modeRest">休息 5分钟</button>
+    </div>
+    <div class="timer-ring">
+      <svg width="230" height="230" viewBox="0 0 230 230">
+        <circle cx="115" cy="115" r="100" fill="none" stroke="#e9efe4" stroke-width="16"/>
+        <circle id="ringProg" cx="115" cy="115" r="100" fill="none" stroke="#7cbf92" stroke-width="16"
+          stroke-linecap="round" stroke-dasharray="628.3" stroke-dashoffset="0"/>
+      </svg>
+      <div class="time"><b id="timerText">20:00</b><span id="timerLabel">专注学习中</span></div>
+    </div>
+    <div class="timer-btns">
+      <button class="big-btn btn-green" id="timerStart" style="min-width:130px">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>开始
+      </button>
+      <button class="big-btn btn-gray" id="timerReset">重置</button>
+    </div>
+    <div class="timer-count" id="tomatoCount">今天已完成 0 个番茄钟</div>
+  </div>
+</div>
+
+<!-- 悬浮添加按钮 -->
+<button class="pc-add hidden" id="fabAdd" aria-label="添加">
+  <svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+</button>
+
+<!-- 底部导航 -->
+<div class="bottom-nav">
+  <button class="nav-item on" data-page="home">
+    <svg viewBox="0 0 24 24"><path d="M12 3l9 8h-3v9h-4v-6h-4v6H6v-9H3z"/></svg>今天
+  </button>
+  <button class="nav-item" data-page="hw">
+    <svg viewBox="0 0 24 24"><path d="M16.7 3.3l4 4L8 15l-4.7.7L4 11zm2.1-2.1l-1 .8 4 4 1-.8a1.4 1.4 0 0 0 0-2l-2-2a1.4 1.4 0 0 0-2 0zM3 17h18v2H3z"/></svg>作业
+  </button>
+  <button class="nav-item" data-page="recite">
+    <svg viewBox="0 0 24 24"><path d="M17 3H6.5A2.5 2.5 0 0 0 4 5.5v13A2.5 2.5 0 0 0 6.5 21H19a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm1 16H6.5a.5.5 0 0 1 0-1H18zM8 8h8v2H8zm0 4h6v2H8z"/></svg>背诵
+  </button>
+  <button class="nav-item" data-page="mk">
+    <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm5 13.6L15.6 17 12 13.4 8.4 17 7 15.6 10.6 12 7 8.4 8.4 7 12 10.6 15.6 7 17 8.4 13.4 12z"/></svg>错题
+  </button>
+  <button class="nav-item" data-page="focus">
+    <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 5h-2v6l4.7 2.9 1-1.7-3.7-2.2z"/></svg>专注
+  </button>
+</div>
+
+<!-- 设置弹层 -->
+<div class="mask hidden" id="settingsMask">
+  <div class="sheet">
+    <h2>设置
+      <button class="close-x" data-close="settingsMask"><svg viewBox="0 0 24 24"><path d="M18.3 5.7L12 12l6.3 6.3-1.4 1.4L10.6 13.4 5.7 18.3 4.3 16.9 10.6 12 4.3 7.1 5.7 5.7 12 10.6l4.9-4.9z" transform="translate(0,-1)"/></svg></button>
+    </h2>
+    <div class="form-row">
+      <label>数据备份</label>
+      <button class="big-btn btn-blue" id="exportBtn" style="width:100%;margin-bottom:10px">导出 JSON 备份</button>
+      <input type="file" id="importFile" accept=".json" class="hidden">
+      <button class="big-btn btn-gray" id="importBtn" style="width:100%">导入恢复</button>
+    </div>
+    <div class="form-row">
+      <label>护眼提醒</label>
+      <button class="big-btn btn-gray" id="eyeToggle" style="width:100%">护眼提醒：开（每20分钟）</button>
+    </div>
+    <div class="form-row">
+      <label>数据清理</label>
+      <button class="big-btn btn-gray" id="clearSample" style="width:100%;margin-bottom:10px">清空示例数据</button>
+      <button class="big-btn btn-red" id="clearAll" style="width:100%">清空全部个人数据</button>
+    </div>
+    <p style="font-size:12px;color:var(--ink-soft);line-height:1.6;margin-top:6px">
+      数据保存在服务器的 MySQL 数据库里，多台设备访问看到的是同一份数据。建议定期使用「导出 JSON 备份」在本地留档。
+      添加到手机桌面：用浏览器打开本页 → 分享/菜单 → 添加到主屏幕。
+    </p>
+  </div>
+</div>
+
+<!-- 添加作业 -->
+<div class="mask hidden" id="hwMask">
+  <div class="sheet">
+    <h2>添加作业
+      <button class="close-x" data-close="hwMask"><svg viewBox="0 0 24 24"><path d="M18.3 5.7L12 12l6.3 6.3-1.4 1.4L10.6 13.4 5.7 18.3 4.3 16.9 10.6 12 4.3 7.1 5.7 5.7 12 10.6l4.9-4.9z" transform="translate(0,-1)"/></svg></button>
+    </h2>
+    <div class="form-row">
+      <label>科目</label>
+      <select id="hwSubject"></select>
+    </div>
+    <div class="form-row">
+      <label>作业内容</label>
+      <input id="hwTitle" placeholder="例如：抄写第5课生字，每个写3遍">
+    </div>
+    <div class="form-row">
+      <label>截止时间</label>
+      <input type="date" id="hwDeadline">
+    </div>
+    <div class="form-row">
+      <label>拆分成小任务（可选，每行一个）</label>
+      <textarea id="hwSubs" placeholder="例如：&#10;先读一遍课文&#10;再抄写生字&#10;最后家长签字"></textarea>
+    </div>
+    <button class="big-btn btn-green" id="hwSave">保存作业</button>
+  </div>
+</div>
+
+<!-- 添加科目 -->
+<div class="mask hidden" id="subjMask">
+  <div class="sheet">
+    <h2>添加科目
+      <button class="close-x" data-close="subjMask"><svg viewBox="0 0 24 24"><path d="M18.3 5.7L12 12l6.3 6.3-1.4 1.4L10.6 13.4 5.7 18.3 4.3 16.9 10.6 12 4.3 7.1 5.7 5.7 12 10.6l4.9-4.9z" transform="translate(0,-1)"/></svg></button>
+    </h2>
+    <div class="form-row">
+      <label>科目名称</label>
+      <input id="subjName" placeholder="例如：科学、美术">
+    </div>
+    <button class="big-btn btn-green" id="subjSave">添加科目</button>
+  </div>
+</div>
+
+<!-- 添加背诵 -->
+<div class="mask hidden" id="rcMask">
+  <div class="sheet">
+    <h2>添加背诵内容
+      <button class="close-x" data-close="rcMask"><svg viewBox="0 0 24 24"><path d="M18.3 5.7L12 12l6.3 6.3-1.4 1.4L10.6 13.4 5.7 18.3 4.3 16.9 10.6 12 4.3 7.1 5.7 5.7 12 10.6l4.9-4.9z" transform="translate(0,-1)"/></svg></button>
+    </h2>
+    <div class="form-row">
+      <label>类型</label>
+      <select id="rcType">
+        <option value="古诗">古诗</option>
+        <option value="词语">词语</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>标题</label>
+      <input id="rcTitle" placeholder="例如：《静夜思》或 第6课词语">
+    </div>
+    <div class="form-row">
+      <label>内容（背诵时先遮住，自检用）</label>
+      <textarea id="rcContent" placeholder="例如：床前明月光，疑是地上霜……" rows="4"></textarea>
+    </div>
+    <button class="big-btn btn-green" id="rcSave">保存，明天开始第一轮复习</button>
+  </div>
+</div>
+
+<!-- 添加错题 -->
+<div class="mask hidden" id="mkMask">
+  <div class="sheet">
+    <h2>记录错题
+      <button class="close-x" data-close="mkMask"><svg viewBox="0 0 24 24"><path d="M18.3 5.7L12 12l6.3 6.3-1.4 1.4L10.6 13.4 5.7 18.3 4.3 16.9 10.6 12 4.3 7.1 5.7 5.7 12 10.6l4.9-4.9z" transform="translate(0,-1)"/></svg></button>
+    </h2>
+    <div class="form-row">
+      <label>科目</label>
+      <select id="mkSubject"></select>
+    </div>
+    <div class="form-row">
+      <label>题目</label>
+      <textarea id="mkQ" placeholder="把做错的题目抄在这里" rows="3"></textarea>
+    </div>
+    <div class="form-row">
+      <label>正确答案</label>
+      <textarea id="mkA" placeholder="正确答案是什么？" rows="2"></textarea>
+    </div>
+    <button class="big-btn btn-green" id="mkSave">保存错题</button>
+  </div>
+</div>
+
+<!-- 背诵自检 -->
+<div class="mask hidden modal-center" id="rcCheckMask">
+  <div class="modal-box">
+    <h3 id="rcCheckTitle">背诵自检</h3>
+    <p id="rcCheckTip" style="margin-bottom:6px">先自己背一遍，想好之后再点下面查看内容核对</p>
+    <p id="rcCheckContent" class="hidden" style="background:#f7f9f4;border-radius:12px;padding:12px;color:var(--ink);font-size:15px;white-space:pre-wrap"></p>
+    <div class="row" style="margin-bottom:10px">
+      <button class="big-btn btn-blue" id="rcReveal">查看内容</button>
+    </div>
+    <div class="row">
+      <button class="big-btn btn-gray" id="rcNo">还不会</button>
+      <button class="big-btn btn-green" id="rcYes">我会背了</button>
+    </div>
+  </div>
+</div>
+
+<!-- 二次确认 -->
+<div class="mask hidden modal-center" id="confirmMask">
+  <div class="modal-box">
+    <h3 id="confirmTitle">确认操作</h3>
+    <p id="confirmText"></p>
+    <div class="row">
+      <button class="big-btn btn-gray" id="confirmNo">取消</button>
+      <button class="big-btn btn-red" id="confirmYes">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 护眼提醒 -->
+<div class="mask hidden modal-center" id="eyeMask">
+  <div class="modal-box eye-modal">
+    <svg class="mascot" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="44" fill="#fdeec9"/>
+      <circle cx="36" cy="44" r="6" fill="#3a4a3f"/>
+      <circle cx="64" cy="44" r="6" fill="#3a4a3f"/>
+      <circle cx="34" cy="42" r="2" fill="#fff"/><circle cx="62" cy="42" r="2" fill="#fff"/>
+      <path d="M36 62 Q50 74 64 62" stroke="#3a4a3f" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <ellipse cx="24" cy="56" rx="6" ry="4" fill="#f5b8b8" opacity=".7"/>
+      <ellipse cx="76" cy="56" rx="6" ry="4" fill="#f5b8b8" opacity=".7"/>
+    </svg>
+    <h3>眼睛休息时间到</h3>
+    <p>已经学习20分钟啦，看看窗外远处，眨眨眼睛，喝口水吧</p>
+    <button class="big-btn btn-green" id="eyeOk" style="width:100%">我休息好了</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= 数据层（仅 localStorage，完全离线） ================= */
+/* ================= 数据层（MySQL via /api/data，localStorage 仅作网络失败兜底） ================= */
+var KEYS = ['subjects','homework','recites','mistakes','points','streak','lastActive','days','tomato','sampleDone','eyeOn'];
+var DEFAULTS = {
+  subjects: ['语文','数学','英语'], homework: [], recites: [], mistakes: [],
+  points: 0, streak: 0, lastActive: null, days: {}, tomato: {}, sampleDone: false, eyeOn: true
+};
+var data = JSON.parse(JSON.stringify(DEFAULTS));
+
+function persist(){
+  KEYS.forEach(function(k){
+    try{ localStorage.setItem('wb_g3_'+k, JSON.stringify(data[k])); }catch(e){}
+    fetch('/api/data/'+k, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(data[k])
+    }).catch(function(){ /* 网络失败时已兜底到 localStorage */ });
+  });
+}
+
+function boot(){
+  try{
+    Object.keys(localStorage).filter(function(k){ return k.indexOf('wb_g3_')===0; })
+      .forEach(function(k){ localStorage.removeItem(k); });
+  }catch(e){}
+  fetch('/api/data').then(function(r){
+    if(!r.ok) throw new Error('bad');
+    return r.json();
+  }).then(function(remote){
+    var hasRemote = KEYS.some(function(k){ return remote[k] !== null; });
+    if(hasRemote){
+      KEYS.forEach(function(k){ if(remote[k]!==null) data[k]=remote[k]; });
+    }
+    refreshAll();
+    if(!hasRemote){ seedSamples(); persist(); refreshAll(); }
+  }).catch(function(){
+    KEYS.forEach(function(k){
+      try{
+        var v = localStorage.getItem('wb_g3_'+k);
+        if(v!==null) data[k]=JSON.parse(v);
+      }catch(e){}
+    });
+    refreshAll();
+  });
+}
+
+/* ================= 日期工具 ================= */
+function pad(n){ return n<10?'0'+n:''+n; }
+function dstr(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function todayStr(){ return dstr(new Date()); }
+function addDays(s, n){ var d=new Date(s+'T00:00:00'); d.setDate(d.getDate()+n); return dstr(d); }
+function dayRec(s){
+  if(!data.days[s]) data.days[s]={hwCk:false,rcCk:false,reviews:0,hwDone:0,hwTotal:0,earned:0};
+  return data.days[s];
+}
+var WEEK_CN=['日','一','二','三','四','五','六'];
+
+/* ================= 示例数据 ================= */
+function seedSamples(){
+  if(data.sampleDone) return;
+  var t = todayStr(), y = addDays(t,-1);
+  data.homework.push({
+    id:'s1', subject:'语文', title:'抄写第8课生字，每个写3遍（示例）',
+    deadline:y, done:false, created:y,
+    subs:[{text:'读课文一遍',done:true},{text:'抄写生字',done:false}]
+  });
+  data.homework.push({
+    id:'s2', subject:'数学', title:'完成口算练习第20页（示例）',
+    deadline:t, done:false, created:t, subs:[]
+  });
+  data.recites.push({
+    id:'s3', type:'古诗', title:'《咏鹅》（示例）',
+    content:'鹅，鹅，鹅，曲项向天歌。\n白毛浮绿水，红掌拨清波。',
+    created:y, stage:0, lastAction:y, done:false, history:[]
+  });
+  data.mistakes.push({
+    id:'s4', subject:'数学', question:'36 + 27 = ? （示例错题）', answer:'63（个位6+7=13，要进1）', mastered:false
+  });
+  data.sampleDone = true; persist();
+}
+
+/* ================= 通用 UI ================= */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+var toastTimer=null;
+function toast(msg){
+  var t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){t.classList.remove('show');},1800);
+}
+function openMask(id){ $(id).classList.remove('hidden'); }
+function closeMask(id){ $(id).classList.add('hidden'); }
+document.querySelectorAll('[data-close]').forEach(function(b){
+  b.addEventListener('click',function(){ closeMask(b.getAttribute('data-close')); });
+});
+var confirmCb=null;
+function askConfirm(title,text,cb){
+  $('confirmTitle').textContent=title; $('confirmText').textContent=text;
+  confirmCb=cb; openMask('confirmMask');
+}
+$('confirmNo').addEventListener('click',function(){ closeMask('confirmMask'); confirmCb=null; });
+$('confirmYes').addEventListener('click',function(){ closeMask('confirmMask'); if(confirmCb){var f=confirmCb;confirmCb=null;f();} });
+
+/* ================= 积分与打卡 ================= */
+function touchStreak(){
+  var t = todayStr();
+  if(data.lastActive === t) return;
+  var y = addDays(t,-1);
+  if(data.lastActive === y){
+    data.streak += 1;
+    if(data.streak % 7 === 0){
+      data.points += 4; dayRec(t).earned += 4;
+      toast('连续打卡'+data.streak+'天，奖励 +4 分！');
+    }
+  } else {
+    data.streak = 1;
+  }
+  data.lastActive = t;
+}
+function addPoints(n){
+  data.points += n; dayRec(todayStr()).earned += n; touchStreak(); persist(); renderHeader(); renderHome();
+}
+
+/* ================= 头部与首页 ================= */
+function renderHeader(){
+  $('scoreNum').textContent = data.points;
+  $('streakNum').textContent = data.streak;
+  var t = todayStr(), r = dayRec(t);
+  $('doneNum').textContent = r.hwDone + (r.reviews>0? r.reviews : 0);
+  var d = new Date();
+  $('todayDate').textContent = d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日 星期'+WEEK_CN[d.getDay()];
+}
+
+function dueRecites(){
+  var t = todayStr();
+  return data.recites.filter(function(r){
+    if(r.done) return false;
+    var offs=[1,3,7];
+    var due = addDays(r.lastAction, offs[Math.min(r.stage,2)]);
+    return due <= t;
+  });
+}
+
+function renderHome(){
+  var t = todayStr(), html = '';
+  /* 逾期作业 */
+  var overdue = data.homework.filter(function(h){ return !h.done && h.deadline < t; });
+  var todayHw = data.homework.filter(function(h){ return !h.done && h.deadline === t; });
+  var recites = dueRecites();
+
+  if(!overdue.length && !todayHw.length && !recites.length){
+    html = '<div class="empty-note">今天的事情都做完啦，真棒！</div>';
+  }
+  overdue.forEach(function(h){
+    html += '<div class="todo-item overdue">'
+      + '<div class="txt">'+esc(h.title)+'</div>'
+      + '<span class="tag late">逾期</span><span class="tag">'+esc(h.subject)+'</span>'
+      + '<button class="big-btn btn-green" style="min-height:44px" onclick="quickDone(\''+h.id+'\')">完成</button>'
+      + '</div>';
+  });
+  todayHw.forEach(function(h){
+    html += '<div class="todo-item">'
+      + '<div class="txt">'+esc(h.title)+'</div>'
+      + '<span class="tag">'+esc(h.subject)+'</span><span class="tag">今天截止</span>'
+      + '<button class="big-btn btn-blue" style="min-height:44px" onclick="goPage(\'hw\')">去做</button>'
+      + '</div>';
+  });
+  recites.forEach(function(r){
+    html += '<div class="todo-item">'
+      + '<div class="txt">'+esc(r.title)+'</div>'
+      + '<span class="tag recite-tag">'+esc(r.type)+'</span><span class="tag">第'+(r.stage+1)+'轮复习</span>'
+      + '<button class="big-btn btn-blue" style="min-height:44px" onclick="openCheck(\''+r.id+'\')">去背诵</button>'
+      + '</div>';
+  });
+  $('todayList').innerHTML = html;
+
+  /* 打卡按钮 */
+  var r = dayRec(t);
+  var ckHw = $('ckHw'), ckRc = $('ckRc');
+  ckHw.className = 'checkin-btn' + (r.hwCk?' done':'');
+  ckHw.innerHTML = (r.hwCk?'已完成作业打卡':'作业打卡')+'<span class="sub">'+(r.hwCk?'已得 2 分':'完成全部作业 +2分')+'</span>';
+  ckRc.className = 'checkin-btn' + (r.rcCk?' done':'');
+  ckRc.innerHTML = (r.rcCk?'已完成背诵打卡':'背诵打卡')+'<span class="sub">'+(r.rcCk?'已得 2 分':'完成背诵复习 +2分')+'</span>';
+
+  renderWeek();
+}
+
+function renderWeek(){
+  var html='';
+  for(var i=6;i>=0;i--){
+    var s = addDays(todayStr(),-i), r = data.days[s];
+    var label = (i===0?'今天':(i===1?'昨天':(parseInt(s.slice(5,7))+'月'+parseInt(s.slice(8,10))+'日')));
+    html += '<tr><td>'+label+'</td>'
+      + '<td>'+(r? (r.hwDone+'/'+r.hwTotal) : '0/0')+'</td>'
+      + '<td>'+(r? r.reviews : 0)+'次</td>'
+      + '<td>'+(r&&r.earned? '+'+r.earned : '0')+'</td></tr>';
+  }
+  $('weekBody').innerHTML = html;
+}
+
+/* ================= 作业模块 ================= */
+var curSubject = null;
+function renderSubjects(){
+  var html='';
+  data.subjects.forEach(function(s){
+    html += '<button class="chip'+(s===curSubject?' on':'')+'" onclick="pickSubject(\''+esc(s)+'\')">'+esc(s)+'</button>';
+  });
+  html += '<button class="chip add" onclick="openMask(\'subjMask\')">+ 新科目</button>';
+  $('subjChips').innerHTML = html;
+
+  var sel = $('hwSubject'); sel.innerHTML='';
+  data.subjects.forEach(function(s){ sel.innerHTML += '<option>'+esc(s)+'</option>'; });
+  var msel = $('mkSubject'); msel.innerHTML = sel.innerHTML;
+}
+function pickSubject(s){ curSubject = s; renderSubjects(); renderHw(); }
+
+function syncHwCounts(){
+  var t = todayStr(), r = dayRec(t);
+  var todays = data.homework.filter(function(h){ return h.deadline <= t; });
+  r.hwTotal = todays.length;
+  r.hwDone = todays.filter(function(h){return h.done;}).length;
+}
+
+function renderHw(){
+  syncHwCounts(); persist();
+  var list = data.homework.filter(function(h){ return !curSubject || h.subject===curSubject; })
+    .sort(function(a,b){ return (a.done?1:0)-(b.done?1:0) || (a.deadline<b.deadline?-1:1); });
+  $('hwEmpty').classList.toggle('hidden', list.length>0);
+  var t = todayStr(), html='';
+  list.forEach(function(h){
+    var late = !h.done && h.deadline < t;
+    html += '<div class="hw-item'+(late?' overdue':'')+(h.done?' done':'')+'">'
+      + '<div class="hw-head">'
+      + '<button class="hw-check'+(h.done?' checked':'')+'" onclick="toggleHw(\''+h.id+'\')" aria-label="完成">'
+      + '<svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"/></svg></button>'
+      + '<div class="hw-title">'+esc(h.title)+'</div></div>'
+      + '<div class="hw-meta"><span class="subj">'+esc(h.subject)+'</span>'
+      + '<span class="'+(late?'late':'')+'">截止：'+h.deadline+(late?'（已逾期）':'')+'</span>'
+      + '<button class="hw-del" onclick="delHw(\''+h.id+'\')">删除</button></div>';
+    if(h.subs && h.subs.length){
+      html += '<div class="sub-list">';
+      h.subs.forEach(function(s,i){
+        html += '<div class="sub-row'+(s.done?' done':'')+'">'
+          + '<button class="dot'+(s.done?' on':'')+'" onclick="toggleSub(\''+h.id+'\','+i+')">'
+          + '<svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 7"/></svg></button>'
+          + '<span>'+esc(s.text)+'</span></div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  $('hwList').innerHTML = html;
+}
+function toggleHw(id){
+  var h = data.homework.find(function(x){return x.id===id;}); if(!h) return;
+  h.done = !h.done;
+  if(h.done && h.subs) h.subs.forEach(function(s){ s.done = true; });
+  persist(); renderHw(); renderHome(); renderHeader();
+  if(h.done) toast('好棒，作业完成！');
+}
+function toggleSub(id, i){
+  var h = data.homework.find(function(x){return x.id===id;}); if(!h) return;
+  h.subs[i].done = !h.subs[i].done;
+  persist(); renderHw();
+}
+function quickDone(id){
+  var h = data.homework.find(function(x){return x.id===id;}); if(!h) return;
+  h.done = true; if(h.subs) h.subs.forEach(function(s){s.done=true;});
+  persist(); renderHw(); renderHome(); renderHeader();
+  toast('好棒，作业完成！');
+}
+function delHw(id){
+  askConfirm('删除作业','确定要删除这项作业吗？删除后不能恢复。',function(){
+    data.homework = data.homework.filter(function(x){return x.id!==id;});
+    persist(); renderHw(); renderHome(); renderHeader(); toast('已删除');
+  });
+}
+$('hwSave').addEventListener('click',function(){
+  var title = $('hwTitle').value.trim();
+  if(!title){ toast('先写一写作业内容吧'); return; }
+  var dl = $('hwDeadline').value || todayStr();
+  var subs = $('hwSubs').value.split('\n').map(function(s){return s.trim();}).filter(Boolean)
+    .map(function(s){ return {text:s, done:false}; });
+  data.homework.push({ id:'h'+Date.now(), subject:$('hwSubject').value, title:title,
+    deadline:dl, done:false, created:todayStr(), subs:subs });
+  $('hwTitle').value=''; $('hwSubs').value='';
+  persist(); closeMask('hwMask'); renderHw(); renderHome(); renderHeader(); toast('作业添加成功');
+});
+$('subjSave').addEventListener('click',function(){
+  var n = $('subjName').value.trim();
+  if(!n){ toast('先写科目名称'); return; }
+  if(data.subjects.indexOf(n)>=0){ toast('这个科目已经有啦'); return; }
+  data.subjects.push(n); $('subjName').value='';
+  persist(); closeMask('subjMask'); renderSubjects(); renderHw(); toast('科目添加成功');
+});
+
+/* 打卡 */
+$('ckHw').addEventListener('click',function(){
+  var t = todayStr(), r = dayRec(t);
+  if(r.hwCk){ toast('今天已经打过卡啦'); return; }
+  syncHwCounts();
+  if(r.hwTotal===0){ toast('今天还没有作业可以打卡'); return; }
+  if(r.hwDone < r.hwTotal){ toast('还有 '+ (r.hwTotal-r.hwDone) +' 项作业没完成，加油！'); return; }
+  r.hwCk = true; persist();
+  addPoints(2); toast('作业打卡成功 +2 分！');
+});
+$('ckRc').addEventListener('click',function(){
+  var t = todayStr(), r = dayRec(t);
+  if(r.rcCk){ toast('今天已经打过卡啦'); return; }
+  if(r.reviews===0){ toast('先完成一次背诵复习再来打卡吧'); return; }
+  r.rcCk = true; persist();
+  addPoints(2); toast('背诵打卡成功 +2 分！');
+});
+
+/* ================= 背诵模块 ================= */
+function renderRecites(){
+  var offs=[1,3,7], t = todayStr();
+  $('reciteEmpty').classList.toggle('hidden', data.recites.length>0);
+  var html='';
+  var sorted = data.recites.slice().sort(function(a,b){ return (a.done?1:0)-(b.done?1:0); });
+  sorted.forEach(function(r){
+    var due = addDays(r.lastAction, offs[Math.min(r.stage,2)]);
+    var isDue = !r.done && due <= t;
+    html += '<div class="recite-card">'
+      + '<span class="r-type">'+esc(r.type)+'</span>'
+      + '<h3>'+esc(r.title)+'</h3>'
+      + '<div class="r-stage">进度：第 '+Math.min(r.stage+1,3)+' / 3 轮 ｜ '+(r.done?'全部完成':'下次复习：'+due)+'</div>'
+      + (r.done
+          ? '<div class="recite-done-badge">太棒了，这篇已经完全记住啦</div>'
+          : (isDue
+              ? '<div class="r-actions"><button class="big-btn btn-green" onclick="openCheck(\''+r.id+'\')">开始复习自检</button>'
+              : '<div class="r-actions"><button class="big-btn btn-gray" disabled>'+(due>t? due+' 再来复习':'')+'</button>'))
+      + '<button class="big-btn btn-gray" style="flex:0 0 auto;min-width:70px" onclick="delRc(\''+r.id+'\')">删除</button>'
+      + '</div></div>';
+  });
+  $('reciteList').innerHTML = html;
+}
+$('rcSave').addEventListener('click',function(){
+  var title = $('rcTitle').value.trim();
+  if(!title){ toast('先写个标题吧'); return; }
+  data.recites.push({ id:'r'+Date.now(), type:$('rcType').value, title:title,
+    content:$('rcContent').value.trim(), created:todayStr(), stage:0,
+    lastAction:todayStr(), done:false, history:[] });
+  $('rcTitle').value=''; $('rcContent').value='';
+  persist(); closeMask('rcMask'); renderRecites(); renderHome(); toast('添加成功，明天开始第一轮复习');
+});
+function delRc(id){
+  askConfirm('删除背诵内容','确定删除吗？删除后不能恢复。',function(){
+    data.recites = data.recites.filter(function(x){return x.id!==id;});
+    persist(); renderRecites(); renderHome(); toast('已删除');
+  });
+}
+var checkingId = null;
+function openCheck(id){
+  var r = data.recites.find(function(x){return x.id===id;}); if(!r) return;
+  checkingId = id;
+  $('rcCheckTitle').textContent = r.title + '（第 ' + Math.min(r.stage+1,3) + ' 轮复习）';
+  $('rcCheckContent').textContent = r.content || '（没有填写内容）';
+  $('rcCheckContent').classList.add('hidden');
+  $('rcReveal').classList.remove('hidden');
+  openMask('rcCheckMask');
+}
+$('rcReveal').addEventListener('click',function(){
+  $('rcCheckContent').classList.remove('hidden');
+});
+$('rcYes').addEventListener('click',function(){ finishCheck(true); });
+$('rcNo').addEventListener('click',function(){ finishCheck(false); });
+function finishCheck(knew){
+  var r = data.recites.find(function(x){return x.id===checkingId;});
+  closeMask('rcCheckMask'); if(!r) return;
+  var t = todayStr();
+  r.history.push({date:t, knew:knew});
+  r.lastAction = t;
+  if(knew){
+    r.stage += 1;
+    if(r.stage > 2){ r.done = true; toast('太棒了！这篇完全记住了'); }
+    else toast('很好！下次复习：' + addDays(t,[1,3,7][r.stage]));
+  } else {
+    r.stage = 0;
+    toast('没关系，明天再复习一次');
+  }
+  dayRec(t).reviews += 1;
+  persist(); renderRecites(); renderHome(); renderHeader();
+}
+
+/* ================= 错题模块 ================= */
+function renderMistakes(){
+  $('mkEmpty').classList.toggle('hidden', data.mistakes.length>0);
+  var html='';
+  var sorted = data.mistakes.slice().sort(function(a,b){ return (a.mastered?1:0)-(b.mastered?1:0); });
+  sorted.forEach(function(m){
+    html += '<div class="mk-card">'
+      + '<div class="mk-q">'+esc(m.question)+'</div>'
+      + '<div class="mk-a blur" id="mka-'+m.id+'">'+esc(m.answer)+'</div>'
+      + '<div class="mk-foot">'
+      + '<span class="mk-state '+(m.mastered?'yes':'no')+'">'+(m.mastered?'已掌握':'未掌握')+'</span>'
+      + '<button class="big-btn btn-blue" style="min-height:42px;font-size:13px" onclick="toggleAnswer(\''+m.id+'\')">看答案</button>'
+      + '<button class="big-btn '+(m.mastered?'btn-gray':'btn-green')+'" style="min-height:42px;font-size:13px" onclick="toggleMk(\''+m.id+'\')">'+(m.mastered?'标记未掌握':'我会了')+'</button>'
+      + '<button class="hw-del" onclick="delMk(\''+m.id+'\')">删除</button>'
+      + '</div></div>';
+  });
+  $('mkList').innerHTML = html;
+}
+function toggleAnswer(id){ $('mka-'+id).classList.toggle('blur'); }
+function toggleMk(id){
+  var m = data.mistakes.find(function(x){return x.id===id;}); if(!m) return;
+  m.mastered = !m.mastered; persist(); renderMistakes();
+  if(m.mastered) toast('又掌握一道题，真棒！');
+}
+function delMk(id){
+  askConfirm('删除错题','确定删除这道错题吗？',function(){
+    data.mistakes = data.mistakes.filter(function(x){return x.id!==id;});
+    persist(); renderMistakes(); toast('已删除');
+  });
+}
+$('mkSave').addEventListener('click',function(){
+  var q = $('mkQ').value.trim();
+  if(!q){ toast('先把题目写下来'); return; }
+  data.mistakes.push({ id:'m'+Date.now(), subject:$('mkSubject').value,
+    question:q, answer:$('mkA').value.trim(), mastered:false });
+  $('mkQ').value=''; $('mkA').value='';
+  persist(); closeMask('mkMask'); renderMistakes(); toast('错题记录好了，下次别再错啦');
+});
+
+/* ================= 专注计时 ================= */
+var WORK=20*60, REST=5*60;
+var timer={ mode:'work', left:WORK, running:false, tick:null };
+function fmt(s){ return pad(Math.floor(s/60))+':'+pad(s%60); }
+function renderTimer(){
+  var total = timer.mode==='work'?WORK:REST;
+  $('timerText').textContent = fmt(timer.left);
+  $('timerLabel').textContent = timer.mode==='work'?'专注学习中':'休息放松中';
+  $('ringProg').style.strokeDashoffset = 628.3 * (1 - timer.left/total);
+  $('ringProg').setAttribute('stroke', timer.mode==='work'?'#7cbf92':'#7fb2dd');
+  $('modeWork').classList.toggle('on', timer.mode==='work');
+  $('modeRest').classList.toggle('on', timer.mode==='rest');
+  $('timerStart').innerHTML = timer.running
+    ? '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>暂停'
+    : '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>开始';
+  var t = todayStr();
+  $('tomatoCount').textContent = '今天已完成 '+(data.tomato[t]||0)+' 个番茄钟';
+}
+function beep(){
+  try{
+    var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880; g.gain.setValueAtTime(0.15, ctx.currentTime);
+    o.start(); o.stop(ctx.currentTime + 0.35);
+    setTimeout(function(){
+      var o2 = ctx.createOscillator(), g2 = ctx.createGain();
+      o2.connect(g2); g2.connect(ctx.destination);
+      o2.frequency.value = 660; g2.gain.setValueAtTime(0.15, ctx.currentTime);
+      o2.start(); o2.stop(ctx.currentTime + 0.5);
+    }, 400);
+  }catch(e){}
+}
+$('timerStart').addEventListener('click',function(){
+  if(timer.running){
+    clearInterval(timer.tick); timer.running=false;
+  }else{
+    timer.running=true;
+    timer.tick=setInterval(function(){
+      timer.left--;
+      if(timer.left<=0){
+        clearInterval(timer.tick); timer.running=false;
+        beep();
+        if(timer.mode==='work'){
+          var t=todayStr(); data.tomato[t]=(data.tomato[t]||0)+1; persist();
+          toast('完成一个番茄钟！休息 5 分钟吧');
+          timer.mode='rest'; timer.left=REST;
+        }else{
+          toast('休息好了，继续加油');
+          timer.mode='work'; timer.left=WORK;
+        }
+      }
+      renderTimer();
+    },1000);
+  }
+  renderTimer();
+});
+$('timerReset').addEventListener('click',function(){
+  clearInterval(timer.tick); timer.running=false;
+  timer.left = timer.mode==='work'?WORK:REST; renderTimer();
+});
+$('modeWork').addEventListener('click',function(){
+  clearInterval(timer.tick); timer={mode:'work',left:WORK,running:false,tick:null}; renderTimer();
+});
+$('modeRest').addEventListener('click',function(){
+  clearInterval(timer.tick); timer={mode:'rest',left:REST,running:false,tick:null}; renderTimer();
+});
+
+/* ================= 护眼提醒（每20分钟，页面打开期间） ================= */
+var eyeCount = 0;
+setInterval(function(){
+  if(!data.eyeOn) return;
+  if(timer.running && timer.mode==='work') eyeCount = 0; /* 番茄钟自己会提醒 */
+  eyeCount++;
+  if(eyeCount >= 20*60/60){ /* 20分钟 */
+    eyeCount = 0;
+    openMask('eyeMask');
+  }
+}, 60*1000);
+$('eyeOk').addEventListener('click',function(){ closeMask('eyeMask'); });
+$('eyeToggle').addEventListener('click',function(){
+  data.eyeOn = !data.eyeOn; persist();
+  $('eyeToggle').textContent = data.eyeOn ? '护眼提醒：开（每20分钟）' : '护眼提醒：关';
+  toast(data.eyeOn?'护眼提醒已开启':'护眼提醒已关闭');
+});
+
+/* ================= 备份 / 清理 ================= */
+$('settingsBtn').addEventListener('click',function(){
+  $('eyeToggle').textContent = data.eyeOn ? '护眼提醒：开（每20分钟）' : '护眼提醒：关';
+  openMask('settingsMask');
+});
+$('exportBtn').addEventListener('click',function(){
+  var blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '学习小天地备份_'+todayStr()+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+  toast('备份文件已下载');
+});
+$('importBtn').addEventListener('click',function(){ $('importFile').click(); });
+$('importFile').addEventListener('change',function(e){
+  var f = e.target.files[0]; if(!f) return;
+  var reader = new FileReader();
+  reader.onload = function(){
+    try{
+      var d = JSON.parse(reader.result);
+      if(!d || !Array.isArray(d.homework)) throw new Error('bad');
+      askConfirm('导入恢复','导入会覆盖当前所有数据，确定要继续吗？',function(){
+        Object.keys(data).forEach(function(k){ if(d[k]!==undefined) data[k]=d[k]; });
+        persist(); refreshAll(); toast('数据恢复成功');
+      });
+    }catch(err){ toast('文件不对，请选择正确的备份文件'); }
+  };
+  reader.readAsText(f);
+  e.target.value = '';
+});
+$('clearSample').addEventListener('click',function(){
+  askConfirm('清空示例数据','只删除系统自带的示例内容，你自己的学习记录都会保留。要继续吗？',function(){
+    data.homework = data.homework.filter(function(h){return String(h.id).charAt(0)!=='s';});
+    data.recites  = data.recites.filter(function(r){return String(r.id).charAt(0)!=='s';});
+    data.mistakes = data.mistakes.filter(function(m){return String(m.id).charAt(0)!=='s';});
+    persist(); closeMask('settingsMask'); refreshAll(); toast('示例数据已清空');
+  });
+});
+$('clearAll').addEventListener('click',function(){
+  askConfirm('清空全部个人数据','⚠️ 这会删除你所有的作业、背诵、错题和积分记录，删除后无法恢复！建议先导出备份。真的要清空吗？',function(){
+    Object.keys(localStorage).filter(function(k){return k.indexOf('wb_g3_')===0;})
+      .forEach(function(k){ localStorage.removeItem(k); });
+    data = { subjects:['语文','数学','英语'], homework:[], recites:[], mistakes:[],
+      points:0, streak:0, lastActive:null, days:{}, tomato:{}, sampleDone:true, eyeOn:true };
+    persist(); closeMask('settingsMask'); refreshAll(); toast('已全部清空');
+  });
+});
+
+/* ================= 导航 ================= */
+var curPage = 'home';
+function goPage(p){
+  curPage = p;
+  document.querySelectorAll('.nav-item').forEach(function(n){
+    n.classList.toggle('on', n.getAttribute('data-page')===p);
+  });
+  document.querySelectorAll('.page').forEach(function(pg){ pg.classList.remove('active'); });
+  $('page-'+p).classList.add('active');
+  $('fabAdd').classList.toggle('hidden', !(p==='hw'||p==='recite'||p==='mk'));
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.nav-item').forEach(function(n){
+  n.addEventListener('click',function(){ goPage(n.getAttribute('data-page')); });
+});
+$('fabAdd').addEventListener('click',function(){
+  $('hwDeadline').value = todayStr();
+  if(curPage==='hw') openMask('hwMask');
+  else if(curPage==='recite') openMask('rcMask');
+  else if(curPage==='mk') openMask('mkMask');
+});
+
+/* ================= T-1 日作业自动顺延说明 =================
+   未完成且逾期的作业会一直在「今天要处理」区红色提醒，直到完成为止，
+   不会凭空消失。 */
+
+function refreshAll(){
+  curSubject = curSubject || data.subjects[0];
+  renderHeader(); renderHome(); renderSubjects(); renderHw();
+  renderRecites(); renderMistakes(); renderTimer();
+}
+
+boot();
+</script>
+</body>
+</html>
