@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#5bb98c">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="沐沐乐园">
 <title>沐沐学习乐园</title>
 <style>
 :root{
@@ -95,11 +102,15 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
 .st-todo{background:#eef1f4;color:#68757f}.st-doing{background:#e3f0fc;color:#2f7cc0}
 .st-done{background:#e2f5ea;color:#2e8b5f}.st-delay{background:#fdeede;color:#c07a2e}
 .subtag{color:#fff;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:800;flex:none}
-/* course table */
-.ctable{display:grid;grid-template-columns:44px repeat(5,1fr);gap:5px}
-.chead{text-align:center;font-weight:800;font-size:12px;padding:5px 0;color:var(--sub)}
-.cslot{border-radius:10px;padding:7px 2px;text-align:center;font-size:11.5px;font-weight:700;color:#fff;line-height:1.35;min-height:40px;display:flex;align-items:center;justify-content:center;word-break:break-all}
-.cslot.today{outline:3px solid var(--yellow);outline-offset:-3px;box-shadow:0 4px 10px rgba(247,201,72,.5)}
+/* course table (线框表格) */
+.ct{border-collapse:collapse;width:100%}
+.ct th,.ct td{border:2px solid #dbe7e0;padding:8px 4px;text-align:center;font-size:13px;line-height:1.35}
+.ct th{background:#eaf4ee;color:var(--green-d);font-weight:800}
+.ct .no{width:82px;font-size:11px;color:var(--sub);background:#f7fbf8;font-weight:700;white-space:nowrap}
+.ct td.cc{color:#fff;font-weight:700;min-width:58px;word-break:break-all}
+.ct td.none{background:#f2f6f4;color:#b2beb7}
+.ct .hi{box-shadow:inset 0 0 0 3px var(--yellow)}
+.ct th.hi{color:#7a5b00}
 .cno{color:var(--sub);font-size:11px;text-align:center;padding-top:6px;font-weight:800}
 /* 课程预告表 */
 .pv{border-collapse:separate;border-spacing:4px;width:100%}
@@ -148,6 +159,22 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
   .grid5{grid-template-columns:repeat(2,1fr)}
   .grid7 input{padding:5px 2px;font-size:11px}
   .htitle{font-size:19px}
+  .ct th,.ct td{padding:6px 2px;font-size:12px}
+  .tt-ring{width:160px;height:160px}
+  .tt-ring svg{width:160px;height:160px}
+}
+/* 平板/桌面自适应 */
+@media(min-width:768px){
+  main{max-width:960px;padding:0 16px}
+  header{padding:28px 24px 64px}
+  .htitle{font-size:26px}
+  nav{left:50%;transform:translateX(-50%);width:min(760px,100%);border-radius:20px 20px 0 0}
+  nav button{font-size:12px;padding:9px 2px 10px}
+  nav button .ico{font-size:23px}
+  .tt-ring{width:210px;height:210px}
+  .tt-ring svg{width:210px;height:210px}
+  .ring{width:110px;height:110px}
+  .ring svg{width:110px;height:110px}
 }
 /* mistake card */
 .mk{background:#f7fbf8;border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
@@ -244,11 +271,11 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
     </div>
   </section>
 
-  <!-- ============ 课程表 ============ -->
+  <!-- ============ 课程表 + 作息 ============ -->
   <section class="page" id="page-course">
     <div class="card">
       <div class="ctitle">📅 我的课程表 <small id="courseTip"></small></div>
-      <div class="ctable" id="courseGrid"></div>
+      <div style="overflow-x:auto"><table class="ct" id="courseTable"></table></div>
       <div class="row" style="margin-top:12px;gap:6px">
         <span class="chip" style="background:#e66a6a;color:#fff">语文</span>
         <span class="chip" style="background:#5aa9e6;color:#fff">数学</span>
@@ -257,10 +284,6 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
         <span class="chip" style="background:#f7c948;color:#7a5b00">当天高亮</span>
       </div>
     </div>
-  </section>
-
-  <!-- ============ 作息 ============ -->
-  <section class="page" id="page-sched">
     <div class="card tomato-box">
       <div class="ctitle">🍅 专注番茄钟 <small>20分钟学习 + 5分钟休息</small></div>
       <div class="tt-ring">
@@ -356,12 +379,26 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
 
       <!-- 作业录入 -->
       <div class="asec on" id="a-hw">
-        <label class="f">日期</label><input class="input" type="date" id="aHwDate">
+        <label class="f">📚 科目管理（可自定义增删）</label>
+        <div class="row" id="aSubChips" style="margin-bottom:6px"></div>
+        <div class="row">
+          <input class="input" id="aNewSub" style="flex:1;min-width:140px" placeholder="新科目名称，如：编程">
+          <button class="btn sm blue" onclick="aAddSubject()">➕ 添加科目</button>
+        </div>
+        <hr style="border:none;border-top:2px dashed var(--line);margin:14px 0">
+        <div class="row" style="align-items:flex-end">
+          <div style="flex:1;min-width:130px"><label class="f">开始日期</label><input class="input" type="date" id="aHwDate"></div>
+          <div style="flex:1;min-width:130px"><label class="f">截止日期（周期作业可设一周）</label><input class="input" type="date" id="aHwEnd"></div>
+        </div>
         <label class="f">科目</label>
-        <select id="aHwSub"><option>语文</option><option>数学</option><option>英语</option><option>其他</option></select>
+        <select id="aHwSub"></select>
         <label class="f">作业内容</label><input class="input" id="aHwTxt" placeholder="例如：口算第32页">
         <label class="f">预估用时（分钟）</label><input class="input" id="aHwEst" type="number" min="5" value="20">
-        <button class="btn" style="margin-top:12px" onclick="aAddHw()">➕ 添加作业</button>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="aHwSaveBtn" onclick="aAddHw()">➕ 添加作业</button>
+          <button class="btn ghost" id="aHwCancelBtn" style="display:none" onclick="aCancelEdit()">✖ 取消编辑</button>
+        </div>
+        <div id="aHwEditTip" style="display:none;font-size:12px;color:var(--blue);font-weight:700;margin-top:6px">✏️ 正在编辑作业，完成后点「保存修改」</div>
         <hr style="border:none;border-top:2px dashed var(--line);margin:18px 0">
         <label class="f">🤖 粘贴文本智能拆分（每行一条，可写“数学：xxx”自动分科目）</label>
         <textarea id="aHwBulk" rows="5" placeholder="数学：练习册第20页&#10;语文：生字抄写两遍&#10;读英语绘本10分钟"></textarea>
@@ -442,7 +479,6 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
   <button class="on" data-p="home" onclick="showPage('home')"><span class="ico">🏠</span>首页</button>
   <button data-p="hw" onclick="showPage('hw')"><span class="ico">📝</span>作业</button>
   <button data-p="course" onclick="showPage('course')"><span class="ico">📅</span>课程</button>
-  <button data-p="sched" onclick="showPage('sched')"><span class="ico">⏰</span>作息</button>
   <button data-p="mistake" onclick="showPage('mistake')"><span class="ico">📒</span>错题</button>
   <button data-p="reward" onclick="showPage('reward')"><span class="ico">⭐</span>奖励</button>
   <button data-p="admin" onclick="tryAdmin()"><span class="ico">👨‍👩‍👧</span>后台</button>
@@ -509,6 +545,7 @@ function save(key){ fetch(API+key,{method:'POST',headers:{'Content-Type':'applic
 function saveMany(keys){ keys.forEach(save); }
 
 function normalize(){
+  if(!Array.isArray(DB.subjects)) DB.subjects=['语文','数学','英语','其他'];
   if(!Array.isArray(DB.homework)) DB.homework=[];
   DB.homework.forEach(h=>{
     if(h.done===true && !h.status) h.status='done';
@@ -632,7 +669,6 @@ function showPage(p){
   if(p==='home') renderHome();
   if(p==='hw') renderHw();
   if(p==='course') renderCourse();
-  if(p==='sched') renderSched();
   if(p==='mistake') renderMistakes();
   if(p==='reward') renderReward();
   if(p==='admin') renderAdmin();
@@ -672,8 +708,8 @@ function renderCoursePreview(){
   const dowT=dowCN(), dowM=nextSchoolDay(dowT);
   const heads=['','今天（周'+dowT+'）','明天（周'+dowM+'）'];
   let html='<tr>'+heads.map((h,i)=>i===0?'<th>节次</th>':'<th>'+h+'</th>').join('')+'</tr>';
-  const labels=['上午第一节','上午第二节','上午第三节','上午第四节','下午第一节','下午第二节'];
-  for(let i=0;i<6;i++){
+  const labels=SLOT_LABELS.map(s=>s.replace('·',''));
+  for(let i=0;i<7;i++){
     html+='<tr><td class="daylbl" style="color:var(--sub)">'+labels[i]+'</td>';
     for(const dow of [dowT,dowM]){
       const slots=courseOf(dow);
@@ -711,8 +747,8 @@ function renderHome(){
   document.getElementById('hStars').textContent=DB.points;
   document.getElementById('ovStars').textContent=DB.points;
 
-  // 作业进度
-  const list=(DB.homework||[]).filter(h=>h.date===today());
+  // 作业进度（含周期作业：date <= 今天 <= endDate）
+  const list=(DB.homework||[]).filter(h=>hwActiveOn(h,today()));
   const done=list.filter(h=>h.status==='done').length;
   const pct=list.length?Math.round(done/list.length*100):0;
   document.getElementById('ringArc').style.strokeDashoffset=238.8*(1-pct/100);
@@ -740,12 +776,17 @@ function renderHome(){
 
 /* ================= 作业 ================= */
 const ST_TXT={todo:'待做',doing:'进行中',done:'已完成',delay:'延期'};
+function hwActiveOn(h,dt){ // 作业日期区间（兼容旧数据无 endDate）
+  const end=h.endDate||h.date;
+  return (h.date||'')<=dt&&dt<=end;
+}
 function hwRow(h,homeMode){
   const cb=h.status==='done'?'on':'';
   return '<div class="hw '+(h.status==='done'?'done':'')+'">'+
     '<div class="cbx '+cb+'" onclick="hwToggle(\''+h.id+'\')">✔</div>'+
     '<div class="hw-main"><div class="hw-txt">'+esc(h.content)+'</div>'+
     '<div class="hw-meta"><span class="subtag" style="background:'+subColor(h.subject)+'">'+esc(h.subject)+'</span>'+
+    (h.endDate&&h.endDate!==h.date?'<span>📅 '+esc(h.date)+' ~ '+esc(h.endDate)+'</span>':'<span>📅 '+esc(h.date)+'</span>')+
     (h.est?'<span>⏱ 约'+esc(h.est)+'分钟</span>':'')+
     (h.doneAt&&h.status==='done'?'<span>🕒 '+esc(h.doneAt.slice(5,16).replace('T',' '))+'</span>':'')+'</div></div>'+
     (homeMode?'':'<button class="chip stchip st-'+h.status+'" onclick="hwCycle(\''+h.id+'\')">'+ST_TXT[h.status]+'</button>')+
@@ -767,13 +808,13 @@ function hwCycle(id){
 }
 function renderHw(){
   document.getElementById('hwDateLabel').textContent=today()+' 星期'+dowCN();
-  // 科目筛选选项
-  const subs=[...new Set((DB.homework||[]).map(h=>h.subject))];
+  // 科目筛选选项（科目库 + 作业中出现过的科目）
+  const subs=[...new Set([...(DB.subjects||[]),...(DB.homework||[]).map(h=>h.subject)])];
   const fs=document.getElementById('hwFilterSub');
   const cur=fs.value;
   fs.innerHTML='<option value="">全部科目</option>'+subs.map(s=>'<option'+(s===cur?' selected':'')+'>'+esc(s)+'</option>').join('');
   const fsel=fs.value, stsel=document.getElementById('hwFilterSt').value;
-  const list=(DB.homework||[]).filter(h=>h.date===today())
+  const list=(DB.homework||[]).filter(h=>hwActiveOn(h,today()))
     .filter(h=>!fsel||h.subject===fsel).filter(h=>!stsel||h.status===stsel);
   document.getElementById('hwList').innerHTML=list.length?list.map(h=>hwRow(h,false)).join('')
     :'<div class="empty">今天这里空空的～ 作业由家长在后台录入</div>';
@@ -789,7 +830,7 @@ function renderWeekStats(){
   const days=weekDates();
   let tAll=0,tDone=0;
   const rows=days.map(dt=>{
-    const list=(DB.homework||[]).filter(h=>h.date===dt);
+    const list=(DB.homework||[]).filter(h=>hwActiveOn(h,dt));
     const done=list.filter(h=>h.status==='done').length;
     tAll+=list.length; tDone+=done;
     const pct=list.length?Math.round(done/list.length*100):0;
@@ -803,25 +844,28 @@ function renderWeekStats(){
 }
 
 /* ================= 课程表 ================= */
+const SLOT_LABELS=['上午·第一节','上午·第二节','上午·第三节','上午·第四节','下午·第一节','下午·第二节','下午·第三节'];
 function renderCourse(){
-  const grid=document.getElementById('courseGrid');
   const active=activeDayKey();
   const isTomorrow=new Date().getHours()>=18;
   document.getElementById('courseTip').textContent=isTomorrow?('当前已过18:00 · 高亮明天（周'+active+'）'):('高亮今天（周'+active+'）');
-  let html='<div></div>'+DAY_KEYS.map(d=>'<div class="chead'+(d===active?' " style="color:var(--green-d)':'')+'">周'+d+'</div>').join('');
+  let html='<tr><th class="no">节次</th>'+DAY_KEYS.map(d=>'<th class="'+(d===active?'hi':'')+'">周'+d+'</th>').join('')+'</tr>';
   for(let i=0;i<7;i++){
-    html+='<div class="cno">'+(i<5?'上午':'下午')+Number(i%5+1)+'</div>';
+    html+='<tr><td class="no">'+SLOT_LABELS[i]+'</td>';
     for(const dk of DAY_KEYS){
       const c=(DB.courses||[]).find(x=>x.day===dk);
-      const s=c&&c.slots[i]?c.slots[i]:'—';
-      const hi=dk===active&&s!=='—'?' today':'';
-      html+='<div class="cslot'+hi+'" style="background:'+(s==='—'?'#eef3f0':subColor(s))+'">'+esc(s).replace(/\n/g,'<br>')+'</div>';
+      const s=c&&c.slots[i]&&c.slots[i]!=='—'?c.slots[i]:'';
+      const hi=dk===active?' hi':'';
+      if(!s) html+='<td class="cc none'+hi+'">—</td>';
+      else html+='<td class="cc'+hi+'" style="background:'+subColor(s)+'">'+esc(s.replace(/\n/g,'<br>'))+'</td>';
     }
+    html+='</tr>';
   }
-  grid.innerHTML=html;
+  document.getElementById('courseTable').innerHTML=html;
+  renderCourseExtras();
 }
 
-/* ================= 作息 ================= */
+/* ================= 作息（并入课程页） ================= */
 let tt={running:false,mode:'study',left:20*60,total:20*60,timer:null};
 function ttFmt(s){ return pad(Math.floor(s/60))+':'+pad(s%60); }
 function ttPaint(){
@@ -851,7 +895,7 @@ function ttToggle(){
 function ttReset(){
   clearInterval(tt.timer); tt.running=false; tt.mode='study'; tt.total=20*60; tt.left=20*60; ttPaint();
 }
-function renderSched(){
+function renderCourseExtras(){
   const ck=DB.checkins[today()]||{};
   const bm=document.getElementById('ckMorning'), br=document.getElementById('ckReading');
   bm.textContent=ck.morning?'🌅 早读已打卡 ✔':'🌅 早读打卡';
@@ -873,7 +917,7 @@ function doCheckin(type){
   DB.checkins[today()]=DB.checkins[today()]||{};
   if(DB.checkins[today()][type]){ toast('今天已经打过卡啦'); return; }
   DB.checkins[today()][type]=true; save('checkins'); addStars(1);
-  toast('⭐ +1 打卡成功，坚持就是胜利！'); renderSched();
+  toast('⭐ +1 打卡成功，坚持就是胜利！'); renderCourseExtras();
 }
 
 /* ================= 错题 ================= */
@@ -910,6 +954,9 @@ function renderMistakes(){
 }
 function mkForm(id){
   mkEditId=id; mkPhoto=null;
+  const mSel=document.getElementById('mFSub');
+  const mCur=mSel.value;
+  mSel.innerHTML=[...new Set([...(DB.subjects||[]),'数学','语文','英语','其他'])].map(s=>'<option'+(s===mCur?' selected':'')+'>'+esc(s)+'</option>').join('');
   const m=id>=0?DB.mistakes.find(x=>String(x.id)===String(id)):null;
   document.getElementById('mkFormTitle').textContent=m?'✏️ 编辑错题':'➕ 录入错题';
   if(m){
@@ -1058,7 +1105,7 @@ function aTab(key,btn){
   btn.classList.add('on');
   document.querySelectorAll('.asec').forEach(s=>s.classList.remove('on'));
   document.getElementById('a-'+key).classList.add('on');
-  if(key==='hw') aRenderRecent();
+  if(key==='hw'){ aRenderSubjects(); aRenderRecent(); }
   if(key==='course') aRenderCourse();
   if(key==='sched') aRenderSched();
   if(key==='note') aRenderNotes();
@@ -1068,45 +1115,101 @@ function aTab(key,btn){
 function renderAdmin(){ aTab('hw',document.querySelector('#atabs button')); }
 
 /* --- 作业录入 --- */
+let aHwEditId=-1;
+function aRenderSubjects(){
+  document.getElementById('aSubChips').innerHTML=(DB.subjects||[]).map((s,i)=>
+    '<span class="chip" style="background:'+subColor(s)+';color:#fff">'+esc(s)+
+    '<a href="javascript:void(0)" title="删除科目" style="color:#fff;margin-left:5px;font-weight:900;text-decoration:none" onclick="aDelSubject('+i+')">×</a></span>').join(' ');
+  const sel=document.getElementById('aHwSub');
+  const cur=sel.value;
+  sel.innerHTML=(DB.subjects||[]).map(s=>'<option'+(s===cur?' selected':'')+'>'+esc(s)+'</option>').join('');
+}
+function aAddSubject(){
+  const v=document.getElementById('aNewSub').value.trim();
+  if(!v){ toast('请输入科目名称'); return; }
+  if((DB.subjects||[]).indexOf(v)>=0){ toast('该科目已存在'); return; }
+  DB.subjects.push(v); save('subjects');
+  document.getElementById('aNewSub').value='';
+  toast('📚 已添加科目「'+v+'」'); aRenderSubjects();
+}
+function aDelSubject(i){
+  if(!confirm('删除科目「'+DB.subjects[i]+'」？已有作业不受影响。')) return;
+  DB.subjects.splice(i,1); save('subjects'); aRenderSubjects();
+}
 function aAddHw(){
   const txt=document.getElementById('aHwTxt').value.trim();
   if(!txt){ toast('请填写作业内容'); return; }
-  DB.homework.push({
-    id:Date.now(),date:document.getElementById('aHwDate').value||today(),
-    subject:document.getElementById('aHwSub').value,content:txt,
-    est:parseInt(document.getElementById('aHwEst').value)||0,status:'todo',doneAt:null
-  });
+  const d1=document.getElementById('aHwDate').value||today();
+  const d2=document.getElementById('aHwEnd').value||d1;
+  const end=d2<d1?d1:d2; // 截止早于开始时自动纠正
+  const subject=document.getElementById('aHwSub').value||(DB.subjects||[])[0]||'其他';
+  const est=parseInt(document.getElementById('aHwEst').value)||0;
+  if(aHwEditId>=0){
+    const h=DB.homework.find(x=>String(x.id)===String(aHwEditId));
+    if(h){ h.content=txt; h.subject=subject; h.est=est; h.date=d1; h.endDate=end; }
+    save('homework'); aCancelEdit(); toast('✏️ 作业已更新'); aRenderRecent();
+    return;
+  }
+  DB.homework.push({id:Date.now(),date:d1,endDate:end,subject,content:txt,est,status:'todo',doneAt:null});
   save('homework'); document.getElementById('aHwTxt').value='';
-  toast('✅ 作业已添加'); aRenderRecent();
+  toast('✅ 作业已添加（'+d1+(end!==d1?' ~ '+end:'')+'）'); aRenderRecent();
+}
+function aEditHw(id){
+  const h=DB.homework.find(x=>String(x.id)===String(id)); if(!h) return;
+  aHwEditId=id;
+  document.getElementById('aHwDate').value=h.date;
+  document.getElementById('aHwEnd').value=h.endDate||h.date;
+  const sel=document.getElementById('aHwSub');
+  if([].concat(sel.options).map(o=>o.value).indexOf(h.subject)<0){ sel.innerHTML='<option>'+esc(h.subject)+'</option>'; }
+  sel.value=h.subject;
+  document.getElementById('aHwTxt').value=h.content;
+  document.getElementById('aHwEst').value=h.est||20;
+  document.getElementById('aHwSaveBtn').textContent='💾 保存修改';
+  document.getElementById('aHwCancelBtn').style.display='';
+  document.getElementById('aHwEditTip').style.display='';
+  window.scrollTo(0,0);
+}
+function aCancelEdit(){
+  aHwEditId=-1;
+  document.getElementById('aHwTxt').value='';
+  document.getElementById('aHwSaveBtn').textContent='➕ 添加作业';
+  document.getElementById('aHwCancelBtn').style.display='none';
+  document.getElementById('aHwEditTip').style.display='none';
 }
 function aBulkAdd(){
   const raw=document.getElementById('aHwBulk').value.trim();
   if(!raw){ toast('请粘贴作业文本'); return; }
-  const date=document.getElementById('aHwDate').value||today();
+  const d1=document.getElementById('aHwDate').value||today();
+  const d2=document.getElementById('aHwEnd').value||d1;
+  const end=d2<d1?d1:d2;
   const est=parseInt(document.getElementById('aHwEst').value)||20;
   const lines=raw.split(/[\n;；]+/).map(s=>s.trim()).filter(Boolean);
+  const subs=DB.subjects||[];
   let added=0;
   lines.forEach(line=>{
     let subject='其他',content=line;
-    const m=line.match(/^(语文|数学|英语|其他)[:：、\s]\s*(.+)$/);
-    if(m){ subject=m[1]; content=m[2]; }
-    else if(/口算|计算|乘|除|加减/.test(line)) subject='数学';
-    else if(/生字|抄写|阅读理解|背诵|作文|组词/.test(line)) subject='语文';
-    else if(/英语|单词|绘本|字母/.test(line)) subject='英语';
-    DB.homework.push({id:Date.now()+added,date,subject,content,est,status:'todo',doneAt:null});
+    let m=null;
+    for(const s of subs){ if(line.indexOf(s)===0){ m=[s,line.slice(s.length)]; break; } }
+    if(m){ subject=m[0]; content=m[1].replace(/^[:：、\s]+/,''); }
+    else if(/口算|计算|乘|除|加减/.test(line)) subject=subs.indexOf('数学')>=0?'数学':'其他';
+    else if(/生字|抄写|阅读理解|背诵|作文|组词/.test(line)) subject=subs.indexOf('语文')>=0?'语文':'其他';
+    else if(/英语|单词|绘本|字母/.test(line)) subject=subs.indexOf('英语')>=0?'英语':'其他';
+    DB.homework.push({id:Date.now()+added,date:d1,endDate:end,subject,content,est,status:'todo',doneAt:null});
     added++;
   });
   save('homework'); document.getElementById('aHwBulk').value='';
   toast('🤖 已智能拆分并添加 '+added+' 条作业'); aRenderRecent();
 }
-function aDelHw(id){ DB.homework=DB.homework.filter(h=>h.id!==id); save('homework'); aRenderRecent(); }
+function aDelHw(id){ DB.homework=DB.homework.filter(h=>String(h.id)!==String(id)); save('homework'); aRenderRecent(); }
 function aRenderRecent(){
   const days=weekDates().slice(0,7); const set=new Set(days);
-  const list=(DB.homework||[]).filter(h=>set.has(h.date)).sort((a,b)=>a.date<b.date?1:-1).slice(0,40);
+  const list=(DB.homework||[]).filter(h=>set.has(h.date)||set.has(h.endDate)).sort((a,b)=>a.date<b.date?1:-1).slice(0,40);
   document.getElementById('aHwRecent').innerHTML=list.length?list.map(h=>
     '<div class="hw"><div class="hw-main"><div class="hw-txt">'+esc(h.content)+'</div>'+
     '<div class="hw-meta"><span class="subtag" style="background:'+subColor(h.subject)+'">'+esc(h.subject)+'</span>'+
-    '<span>'+h.date+'</span><span>'+ST_TXT[h.status]+'</span></div></div>'+
+    '<span>'+(h.endDate&&h.endDate!==h.date?esc(h.date)+' ~ '+esc(h.endDate):esc(h.date))+'</span>'+
+    '<span>'+ST_TXT[h.status]+'</span></div></div>'+
+    (h.status!=='done'?'<button class="btn sm ghost" onclick="aEditHw(\''+h.id+'\')">✏️</button>':'')+
     '<button class="btn sm ghost" style="color:var(--red)" onclick="aDelHw(\''+h.id+'\')">删</button></div>').join('')
     :'<div class="empty">本周暂无作业</div>';
 }
@@ -1117,7 +1220,7 @@ function aRenderCourse(){
   let html='<div class="grid7" style="margin-bottom:6px"><div></div>'+DAY_KEYS.map(d=>'<div class="cno">周'+d+'</div>').join('')+'</div>';
   for(let i=0;i<7;i++){
     html+='<div class="grid7" style="margin-bottom:6px">';
-    html+='<div class="cno" style="padding-top:10px">'+(i<5?'上午':'下午')+(i%5+1)+'</div>';
+    html+='<div class="cno" style="padding-top:10px">'+(i<4?'上午'+(i+1):'下午'+(i-3))+'</div>';
     for(const dk of DAY_KEYS){
       const day=c.find(x=>x.day===dk);
       html+='<input class="input" data-d="'+dk+'" data-i="'+i+'" value="'+esc(day&&day.slots[i]?day.slots[i].replace(/\n/g,'/'): '')+'">';
@@ -1266,7 +1369,7 @@ function aSetPwd(){
 function renderCurrent(){
   const p=document.querySelector('.page.on').id.replace('page-','');
   if(p==='home') renderHome(); else if(p==='hw') renderHw();
-  else if(p==='course') renderCourse(); else if(p==='sched') renderSched();
+  else if(p==='course') renderCourse();
   else if(p==='mistake') renderMistakes(); else if(p==='reward') renderReward();
   else if(p==='admin') renderAdmin();
 }
@@ -1274,9 +1377,9 @@ function renderCurrent(){
   try{ await loadAll(); }catch(e){ toast('⚠️ 数据加载失败，请检查服务'); }
   normalize(); seedDefaults(); migratePoints();
   ttReset(); renderHome();
-  // 每分钟刷新首页/作息高亮
+  // 每分钟刷新首页/课程页当前时段高亮
   setInterval(()=>{ if(document.getElementById('page-home').classList.contains('on')) renderHome();
-    if(document.getElementById('page-sched').classList.contains('on')) renderSched(); },60000);
+    if(document.getElementById('page-course').classList.contains('on')) renderCourseExtras(); },60000);
 })();
 </script>
 </body>

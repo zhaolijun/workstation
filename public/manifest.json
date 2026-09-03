@@ -1,0 +1,15 @@
+{
+  "name": "沐沐学习乐园",
+  "short_name": "沐沐乐园",
+  "description": "小学三年级学习工作台：作业、课程表、作息打卡、错题本、星星奖励",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eaf7ef",
+  "theme_color": "#5bb98c",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
