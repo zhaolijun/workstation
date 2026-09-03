@@ -101,6 +101,12 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
 .cslot{border-radius:10px;padding:7px 2px;text-align:center;font-size:11.5px;font-weight:700;color:#fff;line-height:1.35;min-height:40px;display:flex;align-items:center;justify-content:center;word-break:break-all}
 .cslot.today{outline:3px solid var(--yellow);outline-offset:-3px;box-shadow:0 4px 10px rgba(247,201,72,.5)}
 .cno{color:var(--sub);font-size:11px;text-align:center;padding-top:6px;font-weight:800}
+/* 课程预告表 */
+.pv{border-collapse:separate;border-spacing:4px;width:100%}
+.pv th{font-size:11px;color:var(--sub);font-weight:800;padding:4px 2px;white-space:nowrap}
+.pv td.daylbl{font-weight:800;font-size:12px;white-space:nowrap;padding-right:6px}
+.pv td.c{border-radius:9px;padding:9px 2px;text-align:center;font-size:12px;font-weight:700;color:#fff;min-width:50px;line-height:1.3}
+.pv td.c.none{background:#eef3f0;color:#9aa8a1}
 /* schedule timeline */
 .tl{position:relative;padding-left:14px}
 .tl::before{content:'';position:absolute;left:4px;top:6px;bottom:6px;width:3px;border-radius:3px;background:var(--line)}
@@ -169,11 +175,6 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
 <main>
   <!-- ============ 首页 ============ -->
   <section class="page on" id="page-home">
-    <div class="card" id="dailyNoteCard" style="display:none;background:linear-gradient(120deg,#fff8e1,#fff3cd)">
-      <div class="ctitle">📣 今日提醒 <small class="noprint" id="dailyNoteFrom"></small></div>
-      <div id="dailyNoteTxt" style="white-space:pre-wrap;font-weight:600"></div>
-    </div>
-
     <div class="card">
       <div class="ctitle">📊 今日概览 <small id="ovDow"></small></div>
       <div class="ringwrap">
@@ -196,19 +197,19 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
       </div>
     </div>
 
+    <div class="card" id="dailyNoteCard" style="display:none;background:linear-gradient(120deg,#fff8e1,#fff3cd)">
+      <div class="ctitle">📣 今日提醒 <small class="noprint" id="dailyNoteFrom"></small></div>
+      <div id="dailyNoteTxt" style="white-space:pre-wrap;font-weight:600"></div>
+    </div>
+
     <div class="card">
       <div class="ctitle">✅ 今日作业 <small><a href="javascript:showPage('hw')">全部 ›</a></small></div>
       <div id="homeHw"></div>
     </div>
 
     <div class="card">
-      <div class="ctitle">📚 今日课程 <small><a href="javascript:showPage('course')">课程表 ›</a></small></div>
-      <div id="homeCourse" class="row"></div>
-    </div>
-
-    <div class="card">
-      <div class="ctitle">⏰ 今日作息 <small><a href="javascript:showPage('sched')">作息时间 ›</a></small></div>
-      <div class="tl" id="homeSched"></div>
+      <div class="ctitle">📚 课程预告 <small>今天 &amp; 明天 · <a href="javascript:showPage('course')">完整课程表 ›</a></small></div>
+      <div style="overflow-x:auto"><table class="pv" id="coursePreview"></table></div>
     </div>
 
     <div class="card">
@@ -659,6 +660,31 @@ function pwdSubmit(){
 }
 
 /* ================= 首页 ================= */
+function nextSchoolDay(dow){
+  const map={'一':'二','二':'三','三':'四','四':'五','五':'一','六':'一','日':'一'};
+  return map[dow]||dow;
+}
+function courseOf(dow){
+  const c=(DB.courses||[]).find(x=>x.day===dow);
+  return c?c.slots:null;
+}
+function renderCoursePreview(){
+  const dowT=dowCN(), dowM=nextSchoolDay(dowT);
+  const heads=['','今天（周'+dowT+'）','明天（周'+dowM+'）'];
+  let html='<tr>'+heads.map((h,i)=>i===0?'<th>节次</th>':'<th>'+h+'</th>').join('')+'</tr>';
+  const labels=['上午第一节','上午第二节','上午第三节','上午第四节','下午第一节','下午第二节'];
+  for(let i=0;i<6;i++){
+    html+='<tr><td class="daylbl" style="color:var(--sub)">'+labels[i]+'</td>';
+    for(const dow of [dowT,dowM]){
+      const slots=courseOf(dow);
+      const s=slots&&slots[i]&&slots[i]!=='—'?slots[i]:'';
+      if(!s) html+='<td class="c none">—</td>';
+      else html+='<td class="c" style="background:'+subColor(s)+'">'+esc(s.replace(/\n/g,'/'))+'</td>';
+    }
+    html+='</tr>';
+  }
+  return html;
+}
 function activeDayKey(){
   const dow=dowCN();
   if(new Date().getHours()>=18){
@@ -698,19 +724,8 @@ function renderHome(){
   if(!list.length){ box.innerHTML='<div class="empty">🎉 今天没有作业，尽情玩吧！</div>'; }
   else box.innerHTML=list.map(h=>hwRow(h,true)).join('');
 
-  // 今日课程
-  const slots=todayCourse();
-  document.getElementById('homeCourse').innerHTML = slots
-    ? slots.map((s,i)=>'<span class="chip" style="background:'+subColor(s)+';color:#fff">'+(i<5?'上午':'下午')+'第'+((i%5)+1)+'节 · '+esc(s.replace(/\n/g,''))+'</span>').join('')
-    : '<span class="empty" style="padding:6px">今天没有课程安排</span>';
-
-  // 今日作息
-  const arr=todaySchedList(); const nm=nowMin();
-  document.getElementById('homeSched').innerHTML = arr.map(r=>{
-    const t=parseTime(r.time); let cls='';
-    if(t){ if(nm>=t[0]&&nm<t[1]) cls='now'; else if(nm>=t[1]) cls='past'; }
-    return '<div class="tlrow '+cls+'"><span>'+esc(r.name)+'</span><span>'+esc(r.time)+'</span></div>';
-  }).join('')||'<div class="empty">暂无作息数据</div>';
+  // 课程预告（今天+明天，上午4节+下午2节）
+  document.getElementById('coursePreview').innerHTML=renderCoursePreview();
 
   // 连续天数
   document.getElementById('ovStreak').textContent=calcStreak();
