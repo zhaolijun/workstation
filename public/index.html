@@ -195,7 +195,7 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
       <div class="htitle">🌸 沐沐学习乐园</div>
       <div class="hsub" id="hDate">--</div>
     </div>
-    <div class="starpill" onclick="showPage('reward')">⭐ <span id="hStars">0</span></div>
+    <div class="starpill" onclick="showPage('reward')">⭐ <span id="hStars" data-sp-bindable="database" data-sp-database-id="IHNAU7IbM3icp8sjARdDDV">0</span></div>
   </div>
 </header>
 
@@ -533,36 +533,130 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
 
 <script>
 'use strict';
-/* ================= 数据层（后端不可达时自动降级为浏览器本地存储） ================= */
+/* ================= 数据层 · 三层降级：资料库在线表格 > VM后端 > 浏览器本地存储 ================= */
 const API = '/api/data/';
 const LS_PREFIX = 'mumu_ws_';
+const DATABASE_ID = 'IHNAU7IbM3icp8sjARdDDV';
+const SYNC_KEYS = ['subjects','homework','mistakes','points','streak','lastActive','days','tomato','sampleDone','eyeOn','pwdHash','adminPwdHash','courses','dailyNotes','schedule','checkins','rewards','redeemLog','meta'];
 let DB = {};
-let USE_LOCAL = false;
+let DATA_MODE = 'local';       // sp | api | local
+let USE_LOCAL = false;         // 兼容旧变量
+let _spdb = null;              // 在线表格 SDK
+function lsLoad(k){
+  try{
+    const has = Object.prototype.hasOwnProperty.call(localStorage, LS_PREFIX+k);
+    return has ? JSON.parse(localStorage.getItem(LS_PREFIX+k)) : undefined;
+  }catch(e){ return undefined; }
+}
+/* 在线表格：翻页拉全量 + upsert 按键名 */
+function spLoadAll(){
+  _spdb = null;
+  try{
+    _spdb = (window.__SMART_PAGE__ && window.__SMART_PAGE__.database) ? window.__SMART_PAGE__.database : null;
+  }catch(e){}
+  if(!_spdb || typeof _spdb.query!=='function'){ console.log('[mumu] SMART_PAGE SDK 不可用，降级'); return Promise.resolve(null); }
+  var db = _spdb;
+  function loadPage(startCursor, acc, guard){
+    acc = acc || []; guard = guard || 0;
+    if(guard > 100) return Promise.resolve(acc);
+    return db.query({ databaseId: DATABASE_ID, pageSize: 200, startCursor: startCursor })
+      .then(function(r){
+        acc = acc.concat(r.results || []);
+        var next = r.nextCursor;
+        if(r.hasMore && next && next !== startCursor && (r.results||[]).length) return loadPage(next, acc, guard+1);
+        return acc;
+      });
+  }
+  return loadPage().then(function(rows){
+    var out = {}, map = {};
+    rows.forEach(function(r){
+      var k = r['键名']; if(!k) return;
+      map[k] = r._id;
+      try{ out[k] = JSON.parse(r['值']); }catch(e){ out[k] = null; }
+    });
+    out._rowIds = map;
+    return out;
+  });
+}
+function spSave(key, val){
+  var db = _spdb; if(!db) return;
+  var name = '__'+key, v;
+  try{ v = JSON.stringify(val===undefined?null:val); }catch(e){ v='null'; }
+  var props = { '值': { text: v }, '更新时间': { text: String(Date.now()) } };
+  if(DB._rowIds && DB._rowIds[name]){
+    db.updateRecord({ databaseId: DATABASE_ID, recordId: DB._rowIds[name], properties: props })
+      .catch(function(){ spSave(key+'__retry_del', null); }, undefined);
+  } else {
+    var p2 = { '键名': { text: name }, '值': { text: v }, '更新时间': { text: String(Date.now()) } };
+    db.addRecord({ databaseId: DATABASE_ID, properties: p2 })
+      .then(function(r){ if(r && r.id){ if(!DB._rowIds) DB._rowIds={}; DB._rowIds[name]=r.id; } })
+      .catch(function(){});
+  }
+}
+function spSubscribe(){
+  if(!_spdb || typeof _spdb.onUpdated!=='function') return;
+  _spdb.onUpdated(function(){
+    if(_subTimer) clearTimeout(_subTimer);
+    _subTimer = setTimeout(function(){
+      _subTimer = null;
+      spLoadAll().then(function(spData){
+        if(!spData) return;
+        var apiMode = !!(window.__mumuApiOk);
+        Object.keys(DB).forEach(function(k){ if(k==='_rowIds') return; if(!apiMode||lsLoad(k)===undefined) DB[k]=spData[k]; });
+        DB._rowIds = spData._rowIds;
+        normalize(); try{ renderCurrent(); }catch(e2){}
+      });
+    }, 400);
+  });
+}
+let _subTimer = null;
 async function loadAll(){
+  let apiMode = false;
   try{
     const r = await fetch(API.slice(0,-1), {headers:{'Accept':'application/json'}});
     const ct = (r.headers.get('content-type')||'');
-    if(!r.ok || ct.indexOf('json')<0) throw new Error('api_unavailable');
-    DB = await r.json();
-  }catch(e){
-    // 静态托管环境（如资料库页面）：降级为 localStorage 单机模式
-    USE_LOCAL = true;
-    DB = {};
-    for(let i=0;i<localStorage.length;i++){
-      const k = localStorage.key(i);
-      if(k && k.indexOf(LS_PREFIX)===0){
-        try{ DB[k.slice(LS_PREFIX.length)] = JSON.parse(localStorage.getItem(k)); }catch(e2){}
-      }
+    if(r.ok && ct.indexOf('json')>=0){ DB = await r.json(); apiMode = true; }
+  }catch(e){}
+  window.__mumuApiOk = apiMode;
+  const spData = await spLoadAll();
+  if(!spData){
+    if(apiMode){ DATA_MODE='api'; }
+    else{
+      DATA_MODE='local'; USE_LOCAL=true;
+      SYNC_KEYS.forEach(function(k){ const v=lsLoad(k); if(v!==undefined) DB[k]=v; });
     }
+  } else if(!apiMode){
+    // 纯资料库环境：直接以在线表格为准
+    DATA_MODE='sp';
+    SYNC_KEYS.forEach(function(k){ DB[k] = (k in spData) ? spData[k] : undefined; });
+    DB._rowIds = spData._rowIds;
+  } else {
+    // 双活：在线表格为一写多读副本，优先采用表格中存在而该设备本地没有的 key
+    DATA_MODE='sp';
+    SYNC_KEYS.forEach(function(k){
+      const t = spData[k];
+      if(t!==undefined && t!==null && lsLoad(k)===undefined) DB[k]=t;
+    });
+    DB._rowIds = spData._rowIds;
   }
   normalize();
 }
 function save(key){
-  if(USE_LOCAL){
-    try{ localStorage.setItem(LS_PREFIX+key, JSON.stringify(DB[key]===undefined?null:DB[key])); }catch(e){}
+  let v='null';
+  try{ v = JSON.stringify(DB[key]===undefined?null:DB[key]); }catch(e){}
+  try{ localStorage.setItem(LS_PREFIX+key, v); }catch(e){}
+  if(DATA_MODE==='api'){
+    fetch(API+key,{method:'POST',headers:{'Content-Type':'application/json'},body:v});
     return;
   }
-  fetch(API+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(DB[key])});
+  if(DATA_MODE==='sp'){ spSave(key, v); }
+}
+/* 资料库页面防闪现：本地兜底写一遍（DSDK008 表单缓存约定），50ms 内提交完成的临时缓存清掉 */
+function _spFormCache_(key, val){
+  try{
+    localStorage.setItem(LS_PREFIX+key, val===undefined?'null':val);
+    setTimeout(function(){ try{ localStorage.removeItem(LS_PREFIX+key); }catch(e){} }, 50);
+  }catch(e){}
 }
 function saveMany(keys){ keys.forEach(save); }
 
@@ -1398,7 +1492,9 @@ function renderCurrent(){
 (async function boot(){
   try{ await loadAll(); }catch(e){ toast('⚠️ 数据加载失败，请检查服务'); }
   normalize(); seedDefaults(); migratePoints();
-  if(USE_LOCAL) setTimeout(()=>toast('📱 单机模式：数据保存在本设备浏览器中'),600);
+  if(DATA_MODE==='local') setTimeout(()=>toast('📱 单机模式：数据保存在本设备浏览器中'),600);
+  if(DATA_MODE==='sp') setTimeout(()=>toast('☁️ 已连接在线数据，多设备同步可用'),600);
+  spSubscribe();
   ttReset(); renderHome();
   // 每分钟刷新首页/课程页当前时段高亮
   setInterval(()=>{ if(document.getElementById('page-home').classList.contains('on')) renderHome();
