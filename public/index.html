@@ -533,15 +533,37 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
 
 <script>
 'use strict';
-/* ================= 数据层 ================= */
+/* ================= 数据层（后端不可达时自动降级为浏览器本地存储） ================= */
 const API = '/api/data/';
+const LS_PREFIX = 'mumu_ws_';
 let DB = {};
+let USE_LOCAL = false;
 async function loadAll(){
-  const r = await fetch(API.slice(0,-1));
-  DB = await r.json();
+  try{
+    const r = await fetch(API.slice(0,-1), {headers:{'Accept':'application/json'}});
+    const ct = (r.headers.get('content-type')||'');
+    if(!r.ok || ct.indexOf('json')<0) throw new Error('api_unavailable');
+    DB = await r.json();
+  }catch(e){
+    // 静态托管环境（如资料库页面）：降级为 localStorage 单机模式
+    USE_LOCAL = true;
+    DB = {};
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(k && k.indexOf(LS_PREFIX)===0){
+        try{ DB[k.slice(LS_PREFIX.length)] = JSON.parse(localStorage.getItem(k)); }catch(e2){}
+      }
+    }
+  }
   normalize();
 }
-function save(key){ fetch(API+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(DB[key])}); }
+function save(key){
+  if(USE_LOCAL){
+    try{ localStorage.setItem(LS_PREFIX+key, JSON.stringify(DB[key]===undefined?null:DB[key])); }catch(e){}
+    return;
+  }
+  fetch(API+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(DB[key])});
+}
 function saveMany(keys){ keys.forEach(save); }
 
 function normalize(){
@@ -1376,6 +1398,7 @@ function renderCurrent(){
 (async function boot(){
   try{ await loadAll(); }catch(e){ toast('⚠️ 数据加载失败，请检查服务'); }
   normalize(); seedDefaults(); migratePoints();
+  if(USE_LOCAL) setTimeout(()=>toast('📱 单机模式：数据保存在本设备浏览器中'),600);
   ttReset(); renderHome();
   // 每分钟刷新首页/课程页当前时段高亮
   setInterval(()=>{ if(document.getElementById('page-home').classList.contains('on')) renderHome();
