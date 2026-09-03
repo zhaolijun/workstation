@@ -8,6 +8,19 @@
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<script>
+/* 资料库版已取代 VM 版：非资料库域(w.buddy / workbuddy)访问一律跳转到资料库页面 */
+(function(){
+  var LIB_URL = 'https://www.workbuddy.cn/space/d/cY01dENgW7EJWumTv0ngw3';
+  var h = location.hostname;
+  // 资料库官方域 / 本地开发 不重定向；其他（含 VM IP/域名）全部跳走
+  if(h==='localhost' || h==='127.0.0.1') return;
+  if(/(^|\.)workbuddy\.cn$/.test(h)) return;
+  if(/(^|\.)workbuddy\.link$/.test(h)) return;
+  // 仅在嵌入了 SMART_PAGE SDK 的环境下才停留；否则跳走
+  if(!window.__SMART_PAGE__){ location.replace(LIB_URL); }
+})();
+</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="沐沐乐园">
