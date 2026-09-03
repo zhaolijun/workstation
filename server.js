@@ -7,7 +7,19 @@ const Database = require('better-sqlite3');
 const PORT = process.env.PORT || 3000;
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data.sqlite');
 
-const KEYS = ['subjects','homework','recites','mistakes','points','streak','lastActive','days','tomato','sampleDone','eyeOn','pwdHash'];
+const KEYS = [
+  'subjects', 'homework', 'mistakes',           // 学习主数据
+  'points', 'streak', 'lastActive',             // 激励
+  'days', 'tomato', 'sampleDone', 'eyeOn',      // 日常
+  'pwdHash', 'adminPwdHash',                    // 家长/后台密码
+  'courses',                                    // 课程表 [{day:'一'..'五', slots:[7门]}]
+  'dailyNotes',                                 // 每日提醒 { 'YYYY-MM-DD': {text, show} }
+  'schedule',                                   // 作息时间 { weekday:[{name,time}], friday:[{name,time}] }
+  'checkins',                                   // 打卡 { 'YYYY-MM-DD': {morning:bool, reading:bool} }
+  'rewards',                                    // 奖品 [{id,name,stars,emoji}]
+  'redeemLog',                                  // 兑换记录 [{date,rewardId,stars,name}]
+  'meta'                                        // 迁移/版本标记 { pointsMigrated:bool, seeded:bool }
+];
 
 fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
 const db = new Database(DB_FILE);
