@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>每日一题 · 沐沐学习乐园后台</title>
+<link rel="stylesheet" href="/admin/assets/admin.css">
+</head>
+<body>
+<script src="/admin/assets/admin.js"></script>
+<script>
+(async function(){
+  const $root=await admin.mountLayout('quiz','每日一题');
+  const {esc,today,ok,err,confirm2,fnv}=admin;
+  let D=await admin.api.all();
+  let editKey=null;
+
+  const TYPES=[
+    {k:'choice',n:'选择题（ABCD）'},
+    {k:'judge',n:'判断题（对/错）'},
+    {k:'text',n:'填空/应用题（自由作答）'}
+  ];
+
+  $root.innerHTML=`
+    <div class="card">
+      <div class="card-h">➕ 新增 / 编辑题目</div>
+      <div class="f-row">
+        <div class="f-item iw120"><label>日期</label><input type="date" class="input" id="qDate"></div>
+        <div class="f-item iw120"><label>科目</label>
+          <select class="input" id="qSub">
+            <option>语文</option><option>数学</option><option>英语</option>
+          </select>
+        </div>
+        <div class="f-item iw120"><label>题型</label>
+          <select class="input" id="qType">${TYPES.map(t=>`<option value="${t.k}">${t.n}</option>`).join('')}</select>
+        </div>
+        <div class="f-item iw120"><label>星星奖励</label><input type="number" class="input" id="qStars" min="1" value="1"></div>
+      </div>
+      <div class="f-row">
+        <div class="f-item"><label>题目</label>
+          <textarea class="input" id="qQ" rows="2" placeholder="题干"></textarea>
+        </div>
+      </div>
+      <!-- 选择题选项 -->
+      <div id="qChoice">
+        <div class="f-row">
+          <div class="f-item"><label>选项 A</label><input class="input" id="qOpA"></div>
+          <div class="f-item"><label>选项 B</label><input class="input" id="qOpB"></div>
+        </div>
+        <div class="f-row">
+          <div class="f-item"><label>选项 C</label><input class="input" id="qOpC"></div>
+          <div class="f-item"><label>选项 D</label><input class="input" id="qOpD"></div>
+        </div>
+        <div class="f-row">
+          <div class="f-item iw120"><label>正确选项</label>
+            <select class="input" id="qAns"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select>
+          </div>
+        </div>
+      </div>
+      <!-- 判断题 -->
+      <div id="qJudge" style="display:none">
+        <div class="f-row">
+          <div class="f-item iw120"><label>正确答案</label>
+            <select class="input" id="qJdg"><option value="1">✓ 正确</option><option value="0">✗ 错误</option></select>
+          </div>
+        </div>
+      </div>
+      <!-- 填空题 -->
+      <div id="qText" style="display:none">
+        <div class="f-row">
+          <div class="f-item"><label>参考答案（多个等价答案用 / 分隔）</label>
+            <input class="input" id="qTxt" placeholder="如：85 / 八十五">
+          </div>
+        </div>
+      </div>
+      <div class="f-row">
+        <div class="f-item"><label>解析（可选）</label>
+          <textarea class="input" id="qExp" rows="2" placeholder="给孩子看的解题思路"></textarea>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn btn-pri" id="btnSave" onclick="saveQuiz()">➕ 添加题目</button>
+        <button class="btn btn-ghost" id="btnCancel" style="display:none" onclick="cancelEdit()">取消编辑</button>
+        <button class="btn btn-blue" onclick="rndGen()" style="margin-left:auto">🎲 随机生成一题（数学）</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">📋 已录题目 <small>按日期倒序</small></div>
+      <div id="list"></div>
+    </div>
+  `;
+
+  // 题型切换
+  document.getElementById('qType').addEventListener('change',function(){
+    const v=this.value;
+    document.getElementById('qChoice').style.display=v==='choice'?'':'none';
+    document.getElementById('qJudge').style.display=v==='judge'?'':'none';
+    document.getElementById('qText').style.display=v==='text'?'':'none';
+  });
+
+  function getAns(){
+    const t=document.getElementById('qType').value;
+    if(t==='choice') return parseInt(document.getElementById('qAns').value);
+    if(t==='judge') return parseInt(document.getElementById('qJdg').value);
+    return document.getElementById('qTxt').value.split('/').map(s=>s.trim()).filter(Boolean);
+  }
+  function getOps(){
+    return ['qOpA','qOpB','qOpC','qOpD'].map(id=>document.getElementById(id).value.trim()).filter(Boolean);
+  }
+  function reset(){
+    editKey=null;
+    ['qQ','qExp','qOpA','qOpB','qOpC','qOpD','qTxt'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('qSub').value='数学';
+    document.getElementById('qType').value='choice';
+    document.getElementById('qStars').value='1';
+    document.getElementById('qAns').value='0'; document.getElementById('qJdg').value='1';
+    document.getElementById('qChoice').style.display=''; document.getElementById('qJudge').style.display='none'; document.getElementById('qText').style.display='none';
+    document.getElementById('btnSave').textContent='➕ 添加题目';
+    document.getElementById('btnCancel').style.display='none';
+  }
+  window.cancelEdit=reset;
+
+  window.saveQuiz=function(){
+    const d=document.getElementById('qDate').value||today();
+    const subject=document.getElementById('qSub').value;
+    const type=document.getElementById('qType').value;
+    const question=document.getElementById('qQ').value.trim();
+    const explain=document.getElementById('qExp').value.trim();
+    const stars=parseInt(document.getElementById('qStars').value)||1;
+    if(!question){ err('请填写题目'); return; }
+    const q={subject,type,question,explain,stars};
+    if(type==='choice'){
+      const ops=getOps();
+      if(ops.length<2){ err('选择题至少需要 2 个选项'); return; }
+      q.options=ops;
+      q.answer=parseInt(document.getElementById('qAns').value);
+      if(q.answer>=ops.length){ err('正确选项超出范围'); return; }
+    }else if(type==='judge'){
+      q.answer=parseInt(document.getElementById('qJdg').value);
+    }else{
+      const ans=document.getElementById('qTxt').value.trim();
+      if(!ans){ err('请填写参考答案'); return; }
+      q.answer=ans.split('/').map(s=>s.trim()).filter(Boolean);
+    }
+    if(!D.quiz) D.quiz={};
+    if(!D.quiz[d]) D.quiz[d]={};
+    D.quiz[d][subject]=q;
+    admin.api.set('quiz',D.quiz).then(()=>{ok('已保存 '+d+' '+subject); reset(); render();});
+  };
+  window.rndGen=function(){
+    // 三年级数学随机题
+    const list=[
+      ()=>{const a=100+rnd(400),b=10+rnd(90);const ans=a+b;return {type:'choice',question:`${a} + ${b} = ?`,options:shuffle(ans,[ans+10,ans-10,ans+20]),answer:findIdx(ans,shuffle(ans,[ans+10,ans-10,ans+20])),explain:'直接列竖式：个位、十位、百位逐位相加'}},
+      ()=>{const a=200+rnd(400),b=50+rnd(150);const ans=a-b;return {type:'choice',question:`${a} - ${b} = ?`,options:shuffle(ans,[ans+10,ans-10,ans+50]),answer:0,explain:'退位减法要记得向高位借 1'}},
+      ()=>{const a=10+rnd(40),b=2+rnd(8);const ans=a*b;return {type:'choice',question:`${a} × ${b} = ?`,options:shuffle(ans,[ans+a,ans+b,ans+10]),answer:0,explain:'乘法口诀 + 竖式'}},
+      ()=>{const b=2+rnd(8),ans=10+rnd(40);const a=b*ans;return {type:'choice',question:`${a} ÷ ${b} = ?`,options:shuffle(ans,[ans+2,ans-1,ans+b]),answer:0,explain:'用乘法口诀反推'}},
+      ()=>{const a=50+rnd(200),b=10+rnd(40);const ans=a+b;const w1=ans+10,w2=ans-5,w3=ans+1;const ops=shuffle(ans,[w1,w2,w3]);return {type:'choice',question:`小明做了 ${a} 道口算题，又做了 ${b} 道，一共做了多少道？`,options:ops.map(String),answer:ops.indexOf(ans),explain:`${a} + ${b} = ${ans}`}},
+      ()=>{const a=100+rnd(200),b=20+rnd(80);const ans=a-b;const ops=shuffle(ans,[ans+5,ans-10,ans+20]);return {type:'choice',question:`果园里有 ${a} 棵苹果树，砍掉了 ${b} 棵，还剩多少棵？`,options:ops.map(String),answer:ops.indexOf(ans),explain:`${a} - ${b} = ${ans}`}}
+    ];
+    const q=list[rnd(list.length)]();
+    document.getElementById('qSub').value='数学';
+    document.getElementById('qType').value=q.type; document.getElementById('qType').dispatchEvent(new Event('change'));
+    document.getElementById('qQ').value=q.question;
+    document.getElementById('qOpA').value=q.options[0];
+    document.getElementById('qOpB').value=q.options[1];
+    document.getElementById('qOpC').value=q.options[2];
+    document.getElementById('qOpD').value=q.options[3];
+    document.getElementById('qAns').value=q.answer;
+    document.getElementById('qExp').value=q.explain||'';
+    document.getElementById('qStars').value='1';
+    window.scrollTo(0,0);
+    ok('已生成到表单，检查后点保存');
+  };
+  function rnd(n){return Math.floor(Math.random()*n)}
+  function shuffle(ans,wrongs){
+    const all=[ans,...wrongs.slice(0,3)];
+    for(let i=all.length-1;i>0;i--){const j=rnd(i+1);[all[i],all[j]]=[all[j],all[i]];}
+    return all;
+  }
+  function findIdx(ans,arr){return arr.indexOf(ans)}
+
+  window.editQuiz=function(d,s){
+    const q=D.quiz[d]&&D.quiz[d][s];
+    if(!q) return;
+    editKey={d,s};
+    document.getElementById('qDate').value=d;
+    document.getElementById('qSub').value=s;
+    document.getElementById('qType').value=q.type; document.getElementById('qType').dispatchEvent(new Event('change'));
+    document.getElementById('qQ').value=q.question||'';
+    document.getElementById('qExp').value=q.explain||'';
+    document.getElementById('qStars').value=q.stars||1;
+    if(q.type==='choice'){
+      const ops=q.options||[];
+      ['qOpA','qOpB','qOpC','qOpD'].forEach((id,i)=>document.getElementById(id).value=ops[i]||'');
+      document.getElementById('qAns').value=q.answer;
+    }else if(q.type==='judge'){
+      document.getElementById('qJdg').value=q.answer;
+    }else{
+      document.getElementById('qTxt').value=(q.answer||[]).join(' / ');
+    }
+    document.getElementById('btnSave').textContent='💾 保存修改';
+    document.getElementById('btnCancel').style.display='';
+    window.scrollTo(0,0);
+  };
+  window.delQuiz=function(d,s){
+    if(!confirm2(`确定删除 ${d} ${s} 的题目？`)) return;
+    delete D.quiz[d][s];
+    if(!Object.keys(D.quiz[d]).length) delete D.quiz[d];
+    admin.api.set('quiz',D.quiz).then(()=>{ok('已删除'); render();});
+  };
+
+  function render(){
+    const dates=Object.keys(D.quiz||{}).sort().reverse();
+    document.getElementById('list').innerHTML=dates.length?`<table class="tbl">
+      <tr><th style="width:100px">日期</th><th style="width:60px">科目</th><th>题目</th><th class="center" style="width:80px">星</th><th style="width:160px">操作</th></tr>${
+        dates.map(d=>{
+          const subs=D.quiz[d];
+          return Object.keys(subs).map(s=>{
+            const q=subs[s];
+            const short=(q.question||'').slice(0,50)+((q.question||'').length>50?'…':'');
+            return `<tr>
+              <td>${esc(d)}</td>
+              <td><span class="tag" style="background:${admin.subColor(s)};color:#fff">${esc(s)}</span></td>
+              <td>${esc(short)}</td>
+              <td class="center"><span class="tag t-orange">⭐ ${q.stars||1}</span></td>
+              <td>
+                <button class="btn btn-ghost btn-sm" onclick="editQuiz('${d}','${s}')">编辑</button>
+                <button class="btn btn-red btn-sm" onclick="delQuiz('${d}','${s}')">删除</button>
+              </td>
+            </tr>`;
+          }).join('');
+        }).join('')
+      }</table>`:'<div class="empty">暂无题目，点上方添加</div>';
+  }
+  document.getElementById('qDate').value=today();
+  render();
+})();
+</script>
+</body>
+</html>

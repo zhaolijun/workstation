@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>奖品设置 · 沐沐学习乐园后台</title>
+<link rel="stylesheet" href="/admin/assets/admin.css">
+</head>
+<body>
+<script src="/admin/assets/admin.js"></script>
+<script>
+(async function(){
+  const $root=await admin.mountLayout('reward','奖品设置');
+  const {esc,ok,err,confirm2}=admin;
+  let D=await admin.api.all();
+  let editId=null;
+
+  $root.innerHTML=`
+    <div class="card">
+      <div class="card-h">➕ 新增 / 编辑奖品</div>
+      <div class="f-row">
+        <div class="f-item" style="max-width:80px"><label>图标</label><input class="input" id="rEmoji" value="🎁"></div>
+        <div class="f-item"><label>奖品名称</label><input class="input" id="rName" placeholder="如：看动画片 20 分钟"></div>
+        <div class="f-item iw120"><label>所需星星</label><input type="number" class="input" id="rStars" min="1" placeholder="10"></div>
+      </div>
+      <div class="row">
+        <button class="btn btn-pri" id="btnSave" onclick="saveRw()">➕ 添加奖品</button>
+        <button class="btn btn-ghost" id="btnCancel" style="display:none" onclick="cancelEdit()">取消编辑</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">🎁 奖品列表 <small id="cnt"></small></div>
+      <div id="list"></div>
+    </div>
+  `;
+
+  function render(){
+    const list=D.rewards||[];
+    document.getElementById('cnt').textContent='共 '+list.length+' 个奖品';
+    document.getElementById('list').innerHTML=list.length?`<table class="tbl">
+      <tr><th style="width:60px">图标</th><th>名称</th><th class="num">所需星星</th><th style="width:150px">操作</th></tr>${
+        list.map(r=>`<tr>
+          <td style="font-size:22px">${esc(r.emoji||'🎁')}</td>
+          <td>${esc(r.name)}</td>
+          <td class="num">⭐ ${r.stars}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="editRw('${r.id}')">编辑</button>
+            <button class="btn btn-red btn-sm" onclick="delRw('${r.id}')">删除</button>
+          </td>
+        </tr>`).join('')
+      }</table>`:'<div class="empty">暂无奖品</div>';
+  }
+  function cancelEdit(){
+    editId=null;
+    document.getElementById('rEmoji').value='🎁';
+    document.getElementById('rName').value='';
+    document.getElementById('rStars').value='';
+    document.getElementById('btnSave').textContent='➕ 添加奖品';
+    document.getElementById('btnCancel').style.display='none';
+  }
+  window.cancelEdit=cancelEdit;
+  window.saveRw=function(){
+    const name=document.getElementById('rName').value.trim();
+    const stars=parseInt(document.getElementById('rStars').value);
+    const emoji=document.getElementById('rEmoji').value.trim()||'🎁';
+    if(!name){ err('请填写奖品名称'); return; }
+    if(!stars||stars<1){ err('请填写所需星星（>=1）'); return; }
+    if(!D.rewards) D.rewards=[];
+    if(editId){
+      const r=D.rewards.find(x=>String(x.id)===String(editId));
+      if(r){ r.name=name; r.stars=stars; r.emoji=emoji; }
+      admin.api.set('rewards',D.rewards).then(()=>{ok('已保存'); cancelEdit(); render();});
+    }else{
+      D.rewards.push({id:Date.now(),name,stars,emoji});
+      admin.api.set('rewards',D.rewards).then(()=>{ok('已添加'); cancelEdit(); render();});
+    }
+  };
+  window.editRw=function(id){
+    const r=D.rewards.find(x=>String(x.id)===String(id)); if(!r) return;
+    editId=id;
+    document.getElementById('rEmoji').value=r.emoji||'🎁';
+    document.getElementById('rName').value=r.name;
+    document.getElementById('rStars').value=r.stars;
+    document.getElementById('btnSave').textContent='💾 保存修改';
+    document.getElementById('btnCancel').style.display='';
+    window.scrollTo(0,0);
+  };
+  window.delRw=function(id){
+    if(!confirm2('确定删除该奖品？')) return;
+    D.rewards=D.rewards.filter(r=>String(r.id)!==String(id));
+    admin.api.set('rewards',D.rewards).then(()=>{ok('已删除'); render();});
+  };
+  render();
+})();
+</script>
+</body>
+</html>

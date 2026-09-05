@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>课程表管理 · 沐沐学习乐园后台</title>
+<link rel="stylesheet" href="/admin/assets/admin.css">
+<style>
+.tt{border-collapse:collapse;width:100%;font-size:13px}
+.tt th,.tt td{border:1px solid var(--line);padding:6px 4px;text-align:center}
+.tt th{background:#fafbfc;font-weight:700;color:#526173}
+.tt .sl{background:#f7fbf8;font-weight:700;color:var(--sub);font-size:11px;white-space:nowrap;padding:6px 8px}
+.tt input{width:100%;border:1px solid transparent;border-radius:4px;padding:4px 2px;font-size:12px;text-align:center;background:transparent;font-family:inherit}
+.tt input:focus{background:#fff;border-color:var(--green-d)}
+</style>
+</head>
+<body>
+<script src="/admin/assets/admin.js"></script>
+<script>
+(async function(){
+  const $root=await admin.mountLayout('course','课程表管理');
+  const {esc,ok,confirm2}=admin;
+  let D=await admin.api.all();
+  const DAY_KEYS=['一','二','三','四','五'];
+  const SLOTS=['上午·第一节','上午·第二节','上午·第三节','上午·第四节','下午·第一节','下午·第二节','下午·第三节'];
+
+  $root.innerHTML=`
+    <div class="card">
+      <div class="card-h">📅 课程表 <small>周一~周五 · 上午4节 + 下午3节</small></div>
+      <div id="grid"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn btn-pri" onclick="saveCourse()">💾 保存课程表</button>
+        <button class="btn btn-ghost" onclick="resetCourse()">↺ 恢复默认</button>
+      </div>
+    </div>
+  `;
+
+  function render(){
+    const c=D.courses||[];
+    let h='<table class="tt"><tr><th class="sl">节次</th>'+DAY_KEYS.map(d=>'<th>周'+d+'</th>').join('')+'</tr>';
+    for(let i=0;i<7;i++){
+      h+='<tr><td class="sl">'+SLOTS[i]+'</td>';
+      for(const dk of DAY_KEYS){
+        const day=c.find(x=>x.day===dk);
+        const v=day&&day.slots[i]?(day.slots[i]==='—'?'':day.slots[i]):'';
+        h+='<td><input data-d="'+dk+'" data-i="'+i+'" value="'+esc(v.replace(/\n/g,'/'))+'"></td>';
+      }
+      h+='</tr>';
+    }
+    h+='</table>';
+    document.getElementById('grid').innerHTML=h;
+  }
+  window.saveCourse=function(){
+    const c=[];
+    for(const dk of DAY_KEYS){
+      const slots=[];
+      for(let i=0;i<7;i++){
+        const v=document.querySelector(`input[data-d="${dk}"][data-i="${i}"]`).value.trim();
+        slots.push(v?v.replace(/\//g,'\n'):'—');
+      }
+      c.push({day:dk,slots});
+    }
+    D.courses=c;
+    admin.api.set('courses',c).then(()=>ok('已保存'));
+  };
+  window.resetCourse=function(){
+    if(!confirm2('恢复默认课程表？当前修改会丢失。')) return;
+    D.courses=[
+      {day:'一',slots:['数学','语文','体育与健康','信息科技','道德与法治','音乐','课后服务']},
+      {day:'二',slots:['语文','数学','体育与健康','语文','国际理解','心理健康\n生命安全','课后服务']},
+      {day:'三',slots:['数学','语文','体育与健康','英语','美术','科学','课后服务']},
+      {day:'四',slots:['英语','数学','体育与健康','音乐','美术','语文','课后服务']},
+      {day:'五',slots:['语文','综合实践\n劳动','道德与法治','语文','科学','体育与健康','课后服务']}
+    ];
+    render();
+  };
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>仪表盘 · 沐沐学习乐园后台</title>
+<link rel="stylesheet" href="/admin/assets/admin.css">
+</head>
+<body>
+<script src="/admin/assets/admin.js"></script>
+<script>
+(async function(){
+  const $root=await admin.mountLayout('dashboard','仪表盘');
+  const {esc,fmtTime,today,dowCN}=admin;
+  const D=await admin.api.all();
+
+  // KPI
+  const hw=D.homework||[];
+  const todo=hw.filter(h=>h.status!=='done').length;
+  const done=hw.filter(h=>h.status==='done').length;
+  const mk=D.mistakes||[];
+  const mkOpen=mk.filter(m=>!m.mastered).length;
+  const points=D.points||0;
+  const quizLog=D.quizLog||[];
+  const todayStr=today();
+  const todayQuiz=quizLog.filter(l=>l.date===todayStr).length;
+  const todayRight=quizLog.filter(l=>l.date===todayStr&&l.ok).length;
+
+  $root.innerHTML=`
+    <div class="kpi-row">
+      <div class="kpi"><div class="k-lbl">当前星星</div><div class="k-val" style="color:#c78a00">⭐ ${points}</div><div class="k-sub">激励体系核心资产</div></div>
+      <div class="kpi"><div class="k-lbl">作业完成</div><div class="k-val">${done} / ${done+todo}</div><div class="k-sub">待完成 ${todo} 条</div></div>
+      <div class="kpi"><div class="k-lbl">待复习错题</div><div class="k-val" style="color:#c0392b">${mkOpen}</div><div class="k-sub">共 ${mk.length} 条</div></div>
+      <div class="kpi"><div class="k-lbl">今日答题</div><div class="k-val" style="color:#2f7cc0">${todayRight} / ${todayQuiz}</div><div class="k-sub">答对 / 已答</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">📈 本周概览 <small>最近 7 天</small></div>
+      <div id="wkBody"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">🧠 最近每日一题 <small><a href="/admin/quiz.html">去维护 ›</a></small></div>
+      <div id="quizBody"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">📝 最近作业 <small><a href="/admin/homework.html">去管理 ›</a></small></div>
+      <div id="hwBody"></div>
+    </div>
+  `;
+
+  // 本周统计
+  const days=[];
+  for(let i=6;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    days.push(today(d));
+  }
+  const wk=days.map(dt=>{
+    const list=hw.filter(h=>h.date===dt);
+    const done=list.filter(h=>h.status==='done').length;
+    return {dt,total:list.length,done};
+  });
+  const tot=wk.reduce((s,r)=>s+r.total,0), dn=wk.reduce((s,r)=>s+r.done,0);
+  document.getElementById('wkBody').innerHTML=
+    `<table class="tbl"><tr><th>日期</th><th>星期</th><th class="num">布置</th><th class="num">完成</th><th class="num">完成率</th></tr>${
+      wk.map(r=>`<tr><td>${r.dt}</td><td>周${dowCN(new Date(r.dt.replace(/-/g,'/')))}</td><td class="num">${r.total}</td><td class="num">${r.done}</td><td class="num">${r.total?Math.round(r.done/r.total*100):0}%</td></tr>`).join('')
+    }<tr style="font-weight:800;background:#fafbfc"><td>合计</td><td>—</td><td class="num">${tot}</td><td class="num">${dn}</td><td class="num">${tot?Math.round(dn/tot*100):0}%</td></tr></table>`;
+
+  // 最近答题
+  const recentQuiz=quizLog.slice(-10).reverse();
+  document.getElementById('quizBody').innerHTML=recentQuiz.length?
+    `<table class="tbl"><tr><th>日期</th><th>科目</th><th>结果</th><th class="num">星</th><th>时间</th></tr>${
+      recentQuiz.map(l=>`<tr><td>${l.date}</td><td><span class="tag" style="background:${admin.subColor(l.subject)};color:#fff">${esc(l.subject)}</span></td><td>${l.ok?'<span class="tag t-green">✓ 对</span>':'<span class="tag t-red">✗ 错</span>'}</td><td class="num">+${l.stars||0}</td><td>${fmtTime(l.at)}</td></tr>`).join('')
+    }</table>`:'<div class="empty">还没有答题记录</div>';
+
+  // 最近作业
+  const recentHw=hw.slice().sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,8);
+  document.getElementById('hwBody').innerHTML=recentHw.length?
+    `<table class="tbl"><tr><th>日期</th><th>科目</th><th>内容</th><th>状态</th></tr>${
+      recentHw.map(h=>`<tr><td>${esc(h.date||'')}</td><td><span class="tag" style="background:${admin.subColor(h.subject)};color:#fff">${esc(h.subject)}</span></td><td>${esc(h.content||'')}</td><td><span class="tag t-${h.status==='done'?'green':h.status==='doing'?'blue':h.status==='delay'?'orange':'grey'}">${{todo:'待做',doing:'进行中',done:'已完成',delay:'延期'}[h.status]||h.status}</span></td></tr>`).join('')
+    }</table>`:'<div class="empty">暂无作业</div>';
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>登录 · 沐沐学习乐园后台</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(160deg,#eaf7ef 0%,#e3f2fb 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.box{background:#fff;border-radius:14px;box-shadow:0 10px 40px rgba(45,62,80,.14);padding:36px 32px;width:100%;max-width:380px}
+.logo{text-align:center;font-size:38px;margin-bottom:8px}
+h1{text-align:center;font-size:18px;font-weight:800;margin-bottom:4px}
+.sub{text-align:center;color:#8492a6;font-size:12px;margin-bottom:22px}
+label{display:block;font-size:12px;font-weight:700;color:#526173;margin-bottom:6px;margin-top:14px}
+input{width:100%;border:1px solid #d5dbe1;border-radius:6px;padding:10px 12px;font-size:14px;outline:none;transition:border .15s}
+input:focus{border-color:#3d9e72;box-shadow:0 0 0 3px rgba(61,158,114,.12)}
+button{width:100%;margin-top:22px;background:#5bb98c;color:#fff;border:0;border-radius:6px;padding:11px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit}
+button:hover{background:#3d9e72}
+button:disabled{opacity:.6;cursor:not-allowed}
+.tip{margin-top:14px;font-size:12px;color:#8492a6;text-align:center;line-height:1.7}
+.err{margin-top:10px;color:#c0392b;font-size:12px;text-align:center;min-height:18px}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">🌸</div>
+  <h1>沐沐学习乐园 · 后台</h1>
+  <div class="sub">家长管理平台</div>
+  <form id="loginForm">
+    <label>账号</label>
+    <input id="uName" autocomplete="username" placeholder="请输入账号" value="admin" required>
+    <label>密码</label>
+    <input id="uPwd" type="password" autocomplete="current-password" placeholder="请输入密码" required>
+    <div class="err" id="err"></div>
+    <button type="submit" id="btn">登 录</button>
+  </form>
+  <div class="tip">首次使用默认账号 <b>admin</b> / <b>admin123</b><br>登录后请到「用户管理」修改密码</div>
+</div>
+<script>
+document.getElementById('loginForm').addEventListener('submit',async function(e){
+  e.preventDefault();
+  const name=document.getElementById('uName').value.trim();
+  const pwd=document.getElementById('uPwd').value;
+  const btn=document.getElementById('btn');
+  const err=document.getElementById('err');
+  err.textContent='';
+  btn.disabled=true; btn.textContent='登录中…';
+  try{
+    const r=await fetch('/api/admin/login',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      credentials:'same-origin',
+      body:JSON.stringify({name,pwd})
+    });
+    const j=await r.json();
+    if(!r.ok){ err.textContent=j.error==='bad_credentials'?'账号或密码不对':'登录失败，请重试'; return; }
+    location.href='/admin/index.html';
+  }catch(e2){ err.textContent='网络错误，请稍后再试'; }
+  finally{ btn.disabled=false; btn.textContent='登 录'; }
+});
+</script>
+</body>
+</html>

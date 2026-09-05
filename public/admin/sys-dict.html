@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>字典表 · 沐沐学习乐园后台</title>
+<link rel="stylesheet" href="/admin/assets/admin.css">
+<style>
+.dict-editor{border:1px solid var(--line);border-radius:8px;padding:12px}
+.dict-editor .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;background:#eef4f0;color:var(--green-d);font-size:12px;font-weight:700;margin:3px 4px 3px 0}
+.dict-editor .chip .del{cursor:pointer;opacity:.6}
+.dict-editor .chip .del:hover{opacity:1}
+.dict-add{display:flex;gap:6px;margin-top:8px}
+.dict-add input{flex:1}
+</style>
+</head>
+<body>
+<script src="/admin/assets/admin.js"></script>
+<script>
+(async function(){
+  const $root=await admin.mountLayout('sys-dict','系统配置 · 字典表');
+  const {esc,ok,err}=admin;
+  let D=await admin.api.all();
+
+  const DEFAULT={
+    hwStatus:['待做','进行中','已完成','延期'],
+    reasons:['粗心','概念不懂','审题错误','计算错误'],
+    quizTypes:['选择题','判断题','填空题'],
+    quizSubjects:['语文','数学','英语']
+  };
+  const DICT_LABEL={
+    hwStatus:{name:'作业状态',desc:'作业管理里使用'},
+    reasons:{name:'错题原因',desc:'错题本的归类标签'},
+    quizTypes:{name:'题型',desc:'每日一题的题型选项'},
+    quizSubjects:{name:'每日一题科目',desc:'前台每天出几道题，按这个配置'}
+  };
+
+  if(!D.dict) D.dict={};
+  Object.keys(DEFAULT).forEach(k=>{ if(!Array.isArray(D.dict[k])||!D.dict[k].length) D.dict[k]=[...DEFAULT[k]]; });
+
+  $root.innerHTML='';
+  Object.keys(DEFAULT).forEach(k=>{
+    const lbl=DICT_LABEL[k];
+    const card=document.createElement('div');
+    card.className='card';
+    card.innerHTML=`
+      <div class="card-h">📚 ${lbl.name} <small>${lbl.desc}</small></div>
+      <div class="dict-editor" data-k="${k}">
+        <div class="chips"></div>
+        <div class="dict-add">
+          <input class="input" placeholder="新值，回车或点添加">
+          <button class="btn btn-pri btn-sm">添加</button>
+        </div>
+      </div>
+    `;
+    $root.appendChild(card);
+    const box=card.querySelector('.dict-editor');
+    const chipsBox=box.querySelector('.chips');
+    const input=box.querySelector('input');
+    const btn=box.querySelector('button');
+    function paint(){
+      chipsBox.innerHTML=D.dict[k].map((v,i)=>`<span class="chip">${esc(v)}<span class="del" data-i="${i}">×</span></span>`).join('');
+    }
+    chipsBox.addEventListener('click',e=>{
+      const i=e.target.dataset&&e.target.dataset.i;
+      if(i===undefined) return;
+      D.dict[k].splice(+i,1);
+      admin.api.set('dict',D.dict).then(()=>{ok('已删除'); paint();});
+    });
+    function tryAdd(){
+      const v=input.value.trim();
+      if(!v) return;
+      if(D.dict[k].includes(v)){ err('已存在'); return; }
+      D.dict[k].push(v);
+      admin.api.set('dict',D.dict).then(()=>{ok('已添加'); input.value=''; paint();});
+    }
+    btn.addEventListener('click',tryAdd);
+    input.addEventListener('keydown',e=>{ if(e.key==='Enter') tryAdd(); });
+    paint();
+  });
+})();
+</script>
+</body>
+</html>

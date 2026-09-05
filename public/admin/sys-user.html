@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>用户管理 · 沐沐学习乐园后台</title>
+<link rel="stylesheet" href="/admin/assets/admin.css">
+</head>
+<body>
+<script src="/admin/assets/admin.js"></script>
+<script>
+(async function(){
+  const $root=await admin.mountLayout('sys-user','系统配置 · 用户管理');
+  const {esc,ok,err,confirm2,fnv,fmtTime}=admin;
+  let D=await admin.api.all();
+  let me=null;
+  try{ me=await admin.api.me(); }catch(e){}
+  let editId=null;
+
+  $root.innerHTML=`
+    <div class="card">
+      <div class="card-h">➕ 新增用户</div>
+      <div class="f-row">
+        <div class="f-item"><label>账号（登录用）</label><input class="input" id="uName" placeholder="如：mom"></div>
+        <div class="f-item"><label>姓名（显示）</label><input class="input" id="uDisp" placeholder="如：妈妈"></div>
+        <div class="f-item iw120"><label>角色</label>
+          <select class="input" id="uRole"><option value="admin">管理员</option><option value="editor">编辑</option><option value="viewer">只读</option></select>
+        </div>
+        <div class="f-item iw120"><label>初始密码</label><input class="input" id="uPwd" type="password" placeholder="至少4位"></div>
+      </div>
+      <div class="row">
+        <button class="btn btn-pri" onclick="addUser()">➕ 添加用户</button>
+      </div>
+      <p style="font-size:12px;color:var(--sub);margin-top:10px">💡 角色当前只是标识，后续如需细分权限再扩展；密码以哈希存储不会回显。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-h">👥 用户列表 <small>共 ${(D.users||[]).length} 个账号</small></div>
+      <div id="list"></div>
+    </div>
+
+    <!-- 修改密码 -->
+    <div class="mask" id="pwdMask">
+      <div class="modal">
+        <h3>🔑 修改密码</h3>
+        <div id="pwdUser" style="font-size:13px;color:var(--sub);margin-bottom:12px"></div>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--sub);margin-bottom:5px">新密码（至少 4 位）</label>
+        <input class="input" type="password" id="np1" placeholder="新密码">
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--sub);margin:12px 0 5px">再输一遍</label>
+        <input class="input" type="password" id="np2" placeholder="确认新密码">
+        <div class="row" style="justify-content:flex-end;margin-top:16px">
+          <button class="btn btn-ghost" onclick="admin.closeMask('pwdMask')">取消</button>
+          <button class="btn btn-pri" onclick="changePwd()">保存</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  function render(){
+    const users=D.users||[];
+    document.getElementById('list').innerHTML=users.length?`<table class="tbl">
+      <tr><th>账号</th><th>姓名</th><th>角色</th><th>创建时间</th><th style="width:180px">操作</th></tr>${
+        users.map(u=>{
+          const isSelf=me&&me.user.name===u.name;
+          const roleTxt={admin:'管理员',editor:'编辑',viewer:'只读'}[u.role]||u.role;
+          return `<tr>
+            <td><b>${esc(u.name)}</b></td>
+            <td>${esc(u.dispName||u.name)}</td>
+            <td><span class="tag t-${u.role==='admin'?'green':'blue'}">${roleTxt}</span></td>
+            <td>${fmtTime(u.createdAt)}</td>
+            <td>
+              <button class="btn btn-ghost btn-sm" onclick="openPwd('${u.id}','${esc(u.name)}')">改密码</button>
+              ${isSelf?'<span style="color:var(--sub);font-size:11px">当前账号</span>':`<button class="btn btn-red btn-sm" onclick="delUser('${u.id}','${esc(u.name)}')">删除</button>`}
+            </td>
+          </tr>`;
+        }).join('')
+      }</table>`:'<div class="empty">暂无用户</div>';
+  }
+  window.addUser=function(){
+    const name=document.getElementById('uName').value.trim();
+    const dispName=document.getElementById('uDisp').value.trim();
+    const role=document.getElementById('uRole').value;
+    const pwd=document.getElementById('uPwd').value;
+    if(!name){ err('请输入账号'); return; }
+    if(pwd.length<4){ err('密码至少 4 位'); return; }
+    if(!D.users) D.users=[];
+    if(D.users.find(u=>u.name===name)){ err('账号已存在'); return; }
+    D.users.push({id:'u_'+Date.now(),name,dispName:dispName||name,role,pwdHash:fnv(pwd),createdAt:Date.now(),updatedAt:Date.now()});
+    admin.api.set('users',D.users).then(()=>{
+      ok('已添加用户 '+name);
+      document.getElementById('uName').value=''; document.getElementById('uDisp').value=''; document.getElementById('uPwd').value='';
+      render();
+    });
+  };
+  window.openPwd=function(uid,name){
+    document.getElementById('pwdUser').innerHTML='正在修改账号 <b>'+esc(name)+'</b> 的密码';
+    document.getElementById('np1').value=''; document.getElementById('np2').value='';
+    document.getElementById('pwdMask').dataset.uid=uid;
+    admin.openMask('pwdMask');
+  };
+  window.changePwd=function(){
+    const uid=document.getElementById('pwdMask').dataset.uid;
+    const p1=document.getElementById('np1').value, p2=document.getElementById('np2').value;
+    if(p1.length<4){ err('密码至少 4 位'); return; }
+    if(p1!==p2){ err('两次输入不一致'); return; }
+    const u=D.users.find(x=>x.id===uid);
+    if(!u){ err('用户不存在'); return; }
+    u.pwdHash=fnv(p1); u.updatedAt=Date.now();
+    admin.api.set('users',D.users).then(()=>{ok('密码已更新'); admin.closeMask('pwdMask'); render();});
+  };
+  window.delUser=function(uid,name){
+    if(!confirm2(`确定删除用户 ${name}？`)) return;
+    D.users=D.users.filter(u=>u.id!==uid);
+    admin.api.set('users',D.users).then(()=>{ok('已删除'); render();});
+  };
+  render();
+})();
+</script>
+</body>
+</html>

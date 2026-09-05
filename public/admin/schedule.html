@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>作息模板 · 沐沐学习乐园后台</title>
+<link rel="stylesheet" href="/admin/assets/admin.css">
+</head>
+<body>
+<script src="/admin/assets/admin.js"></script>
+<script>
+(async function(){
+  const $root=await admin.mountLayout('schedule','作息模板');
+  const {esc,ok,confirm2}=admin;
+  let D=await admin.api.all();
+
+  $root.innerHTML=`
+    <div class="card">
+      <div class="card-h">⏰ 作息时间模板 <small>每行一条：名称|时间区间</small></div>
+      <div class="f-row">
+        <div class="f-item">
+          <label>周一至周四</label>
+          <textarea class="input" id="wd" rows="15"></textarea>
+        </div>
+        <div class="f-item">
+          <label>周五</label>
+          <textarea class="input" id="fri" rows="15"></textarea>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn btn-pri" onclick="saveSched()">💾 保存模板</button>
+        <button class="btn btn-ghost" onclick="resetSched()">↺ 恢复默认</button>
+      </div>
+      <p style="margin-top:12px;font-size:12px;color:var(--sub)">💡 时间区间格式如 <b>9:00—9:40</b>，使用全角破折号 —</p>
+    </div>
+  `;
+
+  const DEF_WD=[
+    '周启/晨检（晨诵）|8:00—8:20','大课间体育活动（眼保健操）|8:20—9:00',
+    '第一节|9:00—9:40','第二节|9:50—10:30','第三节|10:40—11:20','第四节|11:30—12:10',
+    '午餐|12:10—12:40','自主阅读|12:40—13:00','午休|13:00—13:30','自由活动|13:30—13:50',
+    '午写|13:50—14:10','第五节|14:10—14:50','第六节|15:00—15:40',
+    '大课间体育活动（眼保健操）|15:40—16:10','课后服务 1（学业辅导）|16:10—17:20',
+    '课后服务 2（拓展阅读）|17:20—18:00','错峰放学|17:20—18:00'
+  ];
+  const DEF_FRI=[
+    '晨检（晨诵）|8:00—8:20','大课间体育活动（眼保健操）|8:20—9:00',
+    '第一节|9:00—9:40','第二节|9:50—10:30','第三节|10:40—11:20','第四节|11:30—12:10',
+    '午餐|12:10—12:40','自主阅读|12:40—13:00','午休|13:00—13:30','自由活动|13:30—13:50',
+    '午写|13:50—14:10','第五节|14:10—14:50','第六节|15:00—15:40',
+    '大课间体育活动（眼保健操）|15:40—16:10','课后服务（拓展阅读）|16:10—18:00','错峰放学|17:20—18:00'
+  ];
+
+  function render(){
+    const s=D.schedule||{};
+    document.getElementById('wd').value=(s.weekday||[]).map(r=>Array.isArray(r)?r[0]+'|'+r[1]:r.name+'|'+r.time).join('\n')||DEF_WD.join('\n');
+    document.getElementById('fri').value=(s.friday||[]).map(r=>Array.isArray(r)?r[0]+'|'+r[1]:r.name+'|'+r.time).join('\n')||DEF_FRI.join('\n');
+  }
+  function parse(t){
+    return t.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{
+      const p=l.split(/[|｜]/);
+      return [(p[0]||'').trim(),(p[1]||'').trim()];
+    }).filter(r=>r[0]);
+  }
+  window.saveSched=function(){
+    D.schedule={weekday:parse(document.getElementById('wd').value),friday:parse(document.getElementById('fri').value)};
+    admin.api.set('schedule',D.schedule).then(()=>ok('已保存'));
+  };
+  window.resetSched=function(){
+    if(!confirm2('恢复默认作息模板？当前修改会丢失。')) return;
+    document.getElementById('wd').value=DEF_WD.join('\n');
+    document.getElementById('fri').value=DEF_FRI.join('\n');
+  };
+  render();
+})();
+</script>
+</body>
+</html>

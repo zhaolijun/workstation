@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>作业管理 · 沐沐学习乐园后台</title>
+<link rel="stylesheet" href="/admin/assets/admin.css">
+</head>
+<body>
+<script src="/admin/assets/admin.js"></script>
+<script>
+(async function(){
+  const $root=await admin.mountLayout('homework','作业管理');
+  const {esc,today,ok,err,confirm2}=admin;
+  let D=await admin.api.all();
+  let editId=null;
+
+  const STATUS_TXT={todo:'待做',doing:'进行中',done:'已完成',delay:'延期'};
+
+  $root.innerHTML=`
+    <div class="card">
+      <div class="card-h">➕ 新增 / 编辑作业</div>
+      <div class="f-row">
+        <div class="f-item iw120"><label>开始日期</label><input type="date" class="input" id="hDate"></div>
+        <div class="f-item iw120"><label>截止日期</label><input type="date" class="input" id="hEnd"></div>
+        <div class="f-item"><label>科目</label>
+          <div class="row">
+            <select class="input" id="hSub" style="flex:1"></select>
+            <button class="btn btn-ghost btn-sm" onclick="aShowSubMgr()">⚙ 管理科目</button>
+          </div>
+        </div>
+        <div class="f-item iw120"><label>预估分钟</label><input type="number" class="input" id="hEst" min="5" value="20"></div>
+      </div>
+      <div class="f-row">
+        <div class="f-item"><label>作业内容</label><input class="input" id="hTxt" placeholder="如：口算第32页"></div>
+      </div>
+      <div class="row">
+        <button class="btn btn-pri" id="btnSave" onclick="saveHw()">➕ 添加作业</button>
+        <button class="btn btn-ghost" id="btnCancel" style="display:none" onclick="cancelEdit()">取消编辑</button>
+        <a href="javascript:void(0)" onclick="document.getElementById('blk').classList.toggle('on')" style="font-size:12px;margin-left:auto">🤖 批量智能拆分</a>
+      </div>
+      <div id="blk" class="mask" style="position:static;background:none;padding:0;display:none">
+        <div style="border-top:1px dashed var(--line);margin-top:14px;padding-top:14px">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--sub);margin-bottom:6px">粘贴多行文本，格式：「科目：内容」或仅内容</label>
+          <textarea class="input" id="hBlk" rows="5" placeholder="数学：练习册第20页&#10;语文：生字抄写两遍&#10;读英语绘本10分钟"></textarea>
+          <button class="btn btn-blue btn-sm" style="margin-top:8px" onclick="blkAdd()">🤖 拆分并添加</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">📋 作业列表 <small id="cnt"></small></div>
+      <div class="row" style="margin-bottom:12px">
+        <select class="input" id="fSub" style="width:auto" onchange="renderList()"><option value="">全部科目</option></select>
+        <select class="input" id="fSt" style="width:auto" onchange="renderList()"><option value="">全部状态</option></select>
+        <input type="date" class="input" id="fDate" style="width:auto" onchange="renderList()">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('fDate').value='';document.getElementById('fSub').value='';document.getElementById('fSt').value='';renderList()">清除筛选</button>
+      </div>
+      <div id="list"></div>
+    </div>
+
+    <!-- 科目管理 -->
+    <div class="mask" id="subMask">
+      <div class="modal">
+        <h3>⚙ 科目管理</h3>
+        <div class="row" style="margin-bottom:12px">
+          <input class="input" id="newSub" placeholder="新科目名称" style="flex:1">
+          <button class="btn btn-pri btn-sm" onclick="addSub()">添加</button>
+        </div>
+        <div id="subList"></div>
+        <div class="row" style="justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-ghost" onclick="admin.closeMask('subMask')">关闭</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  function saveHw(){
+    const txt=$root.querySelector('#hTxt').value.trim();
+    if(!txt){ err('请填写作业内容'); return; }
+    const d1=$root.querySelector('#hDate').value||today();
+    const d2=$root.querySelector('#hEnd').value||d1;
+    const end=d2<d1?d1:d2;
+    const sub=$root.querySelector('#hSub').value;
+    const est=parseInt($root.querySelector('#hEst').value)||0;
+    if(editId){
+      const h=D.homework.find(x=>String(x.id)===String(editId));
+      if(h){ h.content=txt; h.subject=sub; h.est=est; h.date=d1; h.endDate=end; }
+      admin.api.set('homework',D.homework).then(()=>{ok('已保存'); cancelEdit(); renderList();});
+    }else{
+      D.homework.push({id:Date.now(),date:d1,endDate:end,subject:sub,content:txt,est,status:'todo',doneAt:null});
+      admin.api.set('homework',D.homework).then(()=>{ok('已添加'); $root.querySelector('#hTxt').value=''; renderList();});
+    }
+    updateCnt();
+  }
+  window.saveHw=saveHw;
+  function cancelEdit(){
+    editId=null;
+    $root.querySelector('#hTxt').value='';
+    $root.querySelector('#btnSave').textContent='➕ 添加作业';
+    $root.querySelector('#btnCancel').style.display='none';
+  }
+  window.cancelEdit=cancelEdit;
+  window.editHw=function(id){
+    const h=D.homework.find(x=>String(x.id)===String(id)); if(!h) return;
+    editId=id;
+    $root.querySelector('#hDate').value=h.date;
+    $root.querySelector('#hEnd').value=h.endDate||h.date;
+    $root.querySelector('#hSub').value=h.subject;
+    $root.querySelector('#hTxt').value=h.content;
+    $root.querySelector('#hEst').value=h.est||20;
+    $root.querySelector('#btnSave').textContent='💾 保存修改';
+    $root.querySelector('#btnCancel').style.display='';
+    window.scrollTo(0,0);
+  };
+  window.delHw=function(id){
+    if(!confirm2('确定删除该作业？')) return;
+    D.homework=D.homework.filter(h=>String(h.id)!==String(id));
+    admin.api.set('homework',D.homework).then(()=>{ok('已删除'); renderList();});
+  };
+  window.blkAdd=function(){
+    const raw=$root.querySelector('#hBlk').value.trim(); if(!raw){ err('请粘贴文本'); return; }
+    const d1=$root.querySelector('#hDate').value||today();
+    const d2=$root.querySelector('#hEnd').value||d1;
+    const end=d2<d1?d1:d2;
+    const est=parseInt($root.querySelector('#hEst').value)||20;
+    const lines=raw.split(/[\n;；]+/).map(s=>s.trim()).filter(Boolean);
+    const subs=D.subjects||[];
+    let added=0;
+    lines.forEach(line=>{
+      let sub='其他',content=line;
+      for(const s of subs){ if(line.indexOf(s)===0){ sub=s; content=line.slice(s.length).replace(/^[:：、\s]+/,''); break; } }
+      if(sub==='其他'){
+        if(/口算|计算|乘|除|加减/.test(line)) sub=subs.indexOf('数学')>=0?'数学':'其他';
+        else if(/生字|抄写|阅读理解|背诵|作文|组词/.test(line)) sub=subs.indexOf('语文')>=0?'语文':'其他';
+        else if(/英语|单词|绘本|字母/.test(line)) sub=subs.indexOf('英语')>=0?'英语':'其他';
+      }
+      D.homework.push({id:Date.now()+added,date:d1,endDate:end,subject:sub,content,est,status:'todo',doneAt:null});
+      added++;
+    });
+    admin.api.set('homework',D.homework).then(()=>{ok('已添加 '+added+' 条'); $root.querySelector('#hBlk').value=''; renderList();});
+  };
+
+  window.aShowSubMgr=function(){
+    renderSubList();
+    admin.openMask('subMask');
+  };
+  window.addSub=function(){
+    const v=$root.querySelector('#newSub').value.trim();
+    if(!v){ err('请输入名称'); return; }
+    if((D.subjects||[]).includes(v)){ err('已存在'); return; }
+    D.subjects.push(v);
+    admin.api.set('subjects',D.subjects).then(()=>{ok('已添加'); $root.querySelector('#newSub').value=''; renderSubList(); renderSubSel();});
+  };
+  window.delSub=function(i){
+    if(!confirm2('删除科目？已有作业不受影响。')) return;
+    D.subjects.splice(i,1);
+    admin.api.set('subjects',D.subjects).then(()=>{ok('已删除'); renderSubList(); renderSubSel();});
+  };
+  function renderSubList(){
+    $root.querySelector('#subList').innerHTML=(D.subjects||[]).map((s,i)=>
+      `<div class="row" style="padding:8px 4px;border-bottom:1px dashed var(--line)">
+        <span class="tag" style="background:${admin.subColor(s)};color:#fff">${esc(s)}</span>
+        <span style="flex:1"></span>
+        <button class="btn btn-red btn-sm" onclick="delSub(${i})">删除</button>
+      </div>`).join('')||'<div class="empty">暂无科目</div>';
+  }
+  function renderSubSel(){
+    const subs=D.subjects||[];
+    const cur=$root.querySelector('#hSub').value;
+    $root.querySelector('#hSub').innerHTML=subs.map(s=>`<option${s===cur?' selected':''}>${esc(s)}</option>`).join('');
+    const fcur=$root.querySelector('#fSub').value;
+    $root.querySelector('#fSub').innerHTML='<option value="">全部科目</option>'+subs.map(s=>`<option${s===fcur?' selected':''}>${esc(s)}</option>`).join('');
+  }
+  function renderList(){
+    const fSub=$root.querySelector('#fSub').value;
+    const fSt=$root.querySelector('#fSt').value;
+    const fDate=$root.querySelector('#fDate').value;
+    let list=[...D.homework].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||((b.id||0)-(a.id||0)));
+    if(fSub) list=list.filter(h=>h.subject===fSub);
+    if(fSt) list=list.filter(h=>h.status===fSt);
+    if(fDate) list=list.filter(h=>h.date===fDate||h.endDate===fDate);
+    $root.querySelector('#list').innerHTML=list.length?`<table class="tbl">
+      <tr><th>日期</th><th>科目</th><th>内容</th><th>用时</th><th>状态</th><th style="width:150px">操作</th></tr>${
+        list.map(h=>`<tr>
+          <td style="white-space:nowrap">${esc(h.date||'')}${h.endDate&&h.endDate!==h.date?'<br><span style="color:var(--sub);font-size:11px">至 '+esc(h.endDate)+'</span>':''}</td>
+          <td><span class="tag" style="background:${admin.subColor(h.subject)};color:#fff">${esc(h.subject)}</span></td>
+          <td>${esc(h.content||'')}</td>
+          <td class="num">${h.est||'-'} 分</td>
+          <td><span class="tag t-${h.status==='done'?'green':h.status==='doing'?'blue':h.status==='delay'?'orange':'grey'}">${STATUS_TXT[h.status]||h.status}</span></td>
+          <td>
+            ${h.status!=='done'?`<button class="btn btn-ghost btn-sm" onclick="editHw('${h.id}')">编辑</button>`:''}
+            <button class="btn btn-red btn-sm" onclick="delHw('${h.id}')">删除</button>
+          </td>
+        </tr>`).join('')
+      }</table>`:'<div class="empty">没有符合条件的作业</div>';
+    updateCnt();
+  }
+  function updateCnt(){ $root.querySelector('#cnt').textContent='共 '+D.homework.length+' 条'; }
+  window.renderList=renderList;
+
+  renderSubSel();
+  renderList();
+})();
+</script>
+</body>
+</html>
