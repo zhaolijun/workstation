@@ -168,9 +168,8 @@ label.f{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:10p
   main{max-width:960px;padding:0 16px}
   header{padding:28px 24px 64px}
   .htitle{font-size:26px}
-  nav{left:50%;transform:translateX(-50%);width:min(760px,100%);border-radius:20px 20px 0 0}
-  nav button{font-size:12px;padding:9px 2px 10px}
-  nav button .ico{font-size:23px}
+  nav button{font-size:13px;padding:10px 2px 11px}
+  nav button .ico{font-size:24px}
   .tt-ring{width:210px;height:210px}
   .tt-ring svg{width:210px;height:210px}
   .ring{width:110px;height:110px}
@@ -630,40 +629,41 @@ function renderCoursePreview(){
   const wrap=document.getElementById('coursePrevWrap');
   const weekend=document.getElementById('coursePrevWeekend');
   const sub=document.getElementById('coursePrevSub');
+  const realTomorrowDow=['日','一','二','三','四','五','六'][addDays(new Date(),1).getDay()];
+  const tomorrowIsWeekend=(realTomorrowDow==='六'||realTomorrowDow==='日');
+  const nextSchool=nextSchoolDay(realTomorrowDow==='日'?'一':realTomorrowDow);  // 明天若是周末也用它兜底
+  const lbl=(dow,tag)=>'<td class="daylbl" style="color:var(--sub)"><div style="font-size:10px;opacity:.75">'+tag+'</div>周'+dow+'</td>';
+  const rowHtml=(dow,tag)=>{
+    const slots=courseOf(dow)||[];
+    let html='<tr>'+lbl(dow,tag);
+    for(let i=0;i<7;i++){
+      const s=slots[i]&&slots[i]!=='—'?slots[i]:'';
+      if(!s) html+='<td class="c none">—</td>';
+      else html+='<td class="c" style="background:'+subColor(s)+'">'+esc(s.replace(/\n/g,'/'))+'</td>';
+    }
+    return html+'</tr>';
+  };
+
   if(isWeekend){
+    // 今周末，明天是周一 → 仍显示明天的课程表（标题写「明天（周一）」）
+    if(!tomorrowIsWeekend){
+      weekend.style.display='none'; wrap.style.display='';
+      sub.innerHTML='今天周末 · 明天上课 · <a href="javascript:showPage(\'course\')">完整课程表 ›</a>';
+      return rowHtml(realTomorrowDow,'明天');
+    }
+    // 周六：明天周日也是周末 → 整块提示
     weekend.style.display=''; wrap.style.display='none';
     sub.innerHTML='周末 · <a href="javascript:showPage(\'course\')">完整课程表 ›</a>';
     return '';
   }
+  // 工作日：今天 + 明天（明天是周末则提示周末休息）
   weekend.style.display='none'; wrap.style.display='';
   sub.innerHTML='今天 &amp; 明天 · <a href="javascript:showPage(\'course\')">完整课程表 ›</a>';
-  const dowM=nextSchoolDay(dowT);  // 用于"明天"标签
-  // 实际"明天"：周五明天是周六，要显示"周末休息"
-  const realTomorrowDow=['日','一','二','三','四','五','六'][addDays(new Date(),1).getDay()];
-  const tomorrowIsWeekend=(realTomorrowDow==='六'||realTomorrowDow==='日');
-  const lbl=(dow,tag)=>'<td class="daylbl" style="color:var(--sub)"><div style="font-size:10px;opacity:.75">'+tag+'</div>周'+dow+'</td>';
-  let html='';
-  // 今天
-  const slotsT=courseOf(dowT)||[];
-  html+='<tr>'+lbl(dowT,'今天');
-  for(let i=0;i<7;i++){
-    const s=slotsT[i]&&slotsT[i]!=='—'?slotsT[i]:'';
-    if(!s) html+='<td class="c none">—</td>';
-    else html+='<td class="c" style="background:'+subColor(s)+'">'+esc(s.replace(/\n/g,'/'))+'</td>';
-  }
-  html+='</tr>';
-  // 明天
+  let html=rowHtml(dowT,'今天');
   if(tomorrowIsWeekend){
     html+='<tr>'+lbl(realTomorrowDow,'明天')+'<td colspan="7" class="c none" style="padding:16px;font-size:13px">🌈 周末休息，没有课程</td></tr>';
   } else {
-    const slotsM=courseOf(dowM)||[];
-    html+='<tr>'+lbl(dowM,'明天');
-    for(let i=0;i<7;i++){
-      const s=slotsM[i]&&slotsM[i]!=='—'?slotsM[i]:'';
-      if(!s) html+='<td class="c none">—</td>';
-      else html+='<td class="c" style="background:'+subColor(s)+'">'+esc(s.replace(/\n/g,'/'))+'</td>';
-    }
-    html+='</tr>';
+    html+=rowHtml(realTomorrowDow,'明天');
   }
   return html;
 }
