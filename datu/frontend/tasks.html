@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>今天待办 · 大土工作台</title>
+  <link rel="stylesheet" href="/datu/assets/app.css">
+  <link rel="stylesheet" href="https://unpkg.com/@wangeditor/editor@5.1.23/dist/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <app-shell :active="'tasks'" :user="user" :categories="navCategories" v-if="loaded">
+      <template #title>今天待办</template>
+      <template #content>
+        <div class="grid full">
+          <div class="card">
+            <h2>添加任务</h2>
+            <div class="form-grid">
+              <div class="field"><label>任务标题</label><input v-model.trim="form.title" placeholder="要做什么？"></div>
+              <div class="field"><label>轻重缓急</label>
+                <select v-model="form.priority">
+                  <option v-for="(text, key) in priorityText" :key="key" :value="key">{{ text }}</option>
+                </select>
+              </div>
+              <div class="field"><label>截止日期</label><input v-model="form.dueDate" type="date"></div>
+              <div class="field"><label>所属分类</label>
+                <select v-model="form.categoryId">
+                  <option value="">（无分类）</option>
+                  <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
+                </select>
+              </div>
+              <div class="field"><label>状态</label>
+                <label style="display:flex;align-items:center;gap:8px;min-height:42px">
+                  <input class="check" type="checkbox" v-model="form.blocked"> 是否卡住
+                </label>
+              </div>
+              <div class="field full"><label>任务内容</label><rich-editor v-model="form.content"></rich-editor></div>
+            </div>
+            <div class="form-actions"><button class="btn primary" @click="createTask">添加任务</button></div>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
+              <h2>任务列表</h2>
+              <span>{{ activeTasks.length + doneToday.length }} 项</span>
+            </div>
+            <div class="filters">
+              <button v-for="item in filterOptions" :key="item.key" class="filter" :class="{ active: filter === item.key }" @click="filter = item.key">{{ item.text }}</button>
+            </div>
+            <template v-for="group in groupedTasks" :key="group.date">
+              <div class="date-group">
+                <h4>{{ group.date === 'future' ? '未来任务' : formatDate(group.date) }} · {{ group.tasks.length }}</h4>
+                <div class="list">
+                  <article v-for="task in group.tasks" :key="task.id" class="item" :class="{ done: task.done }">
+                    <div class="item-top">
+                      <input class="check" type="checkbox" :checked="task.done" @change="toggleDone(task)">
+                      <div>
+                        <div class="item-title" :class="{ 'tag red': isOverdue(task) }">{{ task.title }}</div>
+                        <div class="meta">
+                          <span class="tag" :style="{ background: priorityColor[task.priority] + '22', color: priorityColor[task.priority] }">{{ priorityText[task.priority] }}</span>
+                          <span class="tag" :class="{ red: isOverdue(task) }">截止 {{ formatDate(task.due_date) }}</span>
+                          <span v-if="categoryName(task.category_id)" class="tag blue">{{ categoryName(task.category_id) }}</span>
+                          <span v-if="task.blocked" class="tag red">卡住</span>
+                          <span v-if="task.postponed_count" class="tag amber">顺延 {{ task.postponed_count }} 次</span>
+                        </div>
+                        <div v-if="task.content" class="content-preview" v-html="task.content"></div>
+                      </div>
+                    </div>
+                    <div class="item-actions">
+                      <select :value="task.priority" @change="updateTask(task, { priority: $event.target.value })">
+                        <option v-for="(text, key) in priorityText" :key="key" :value="key">{{ text }}</option>
+                      </select>
+                      <select :value="task.category_id || ''" @change="updateTask(task, { categoryId: $event.target.value })">
+                        <option value="">无分类</option>
+                        <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
+                      </select>
+                      <button class="btn small" @click="postpone(task)">顺延明天</button>
+                      <button class="btn small" @click="toggleBlocked(task)">{{ task.blocked ? '取消卡住' : '标记卡住' }}</button>
+                      <button class="btn small danger" @click="removeTask(task)">删除</button>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </template>
+            <div v-if="!groupedTasks.length" class="empty">暂无任务</div>
+          </div>
+        </div>
+      </template>
+    </app-shell>
+  </div>
+  <script src="/datu/vendor/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/@wangeditor/editor@5.1.23/dist/index.js"></script>
+  <script src="/datu/assets/app.js"></script>
+  <script>
+    Datu.mountPage({
+      active: "tasks",
+      setup() {
+        const state = Vue.reactive({
+          tasks: [], categories: [], filter: "active",
+          form: { title: "", content: "", priority: "urgent_important", dueDate: Datu.today(), categoryId: "", blocked: false }
+        });
+
+        const activeTasks = Vue.computed(() => state.tasks.filter(task => !task.done));
+        const doneToday = Vue.computed(() => state.tasks.filter(task => task.done && (task.completed_at || "").startsWith(Datu.today())));
+        const groupedTasks = Vue.computed(() => {
+          const groups = [];
+          if (state.filter === "active") {
+            const map = {};
+            activeTasks.value.forEach(task => { (map[task.due_date] ||= []).push(task); });
+            Object.keys(map).sort().forEach(date => groups.push({ date, tasks: map[date] }));
+          } else if (state.filter === "today") {
+            groups.push({ date: Datu.today(), tasks: activeTasks.value.filter(task => task.due_date <= Datu.today()) });
+          } else if (state.filter === "future") {
+            groups.push({ date: "future", tasks: activeTasks.value.filter(task => task.due_date > Datu.today()) });
+          } else {
+            groups.push({ date: Datu.today(), tasks: doneToday.value });
+          }
+          return groups;
+        });
+
+        async function load() {
+          const workspace = await Datu.request("/datu/api/workspace");
+          state.tasks = workspace.tasks || [];
+          state.categories = workspace.categories || [];
+        }
+
+        async function refresh() { await load(); Datu.showToast("已保存"); }
+        async function createTask() {
+          if (!state.form.title) return;
+          await Datu.request("/datu/api/tasks", "POST", state.form);
+          state.form = { title: "", content: "", priority: "urgent_important", dueDate: Datu.today(), categoryId: "", blocked: false };
+          await refresh();
+        }
+        async function updateTask(task, patch) { await Datu.request(`/datu/api/tasks/${task.id}`, "PUT", patch); await refresh(); }
+        async function toggleDone(task) { await updateTask(task, { done: !task.done }); }
+        async function postpone(task) { await updateTask(task, { postpone: true, postponedCount: task.postponed_count }); }
+        async function toggleBlocked(task) { await updateTask(task, { blocked: !task.blocked }); }
+        async function removeTask(task) { if (!confirm("确认删除？")) return; await Datu.request(`/datu/api/tasks/${task.id}`, "DELETE"); await refresh(); }
+        function isOverdue(task) { return !task.done && task.due_date < Datu.today(); }
+        function categoryName(id) { return state.categories.find(item => item.id === id)?.name || ""; }
+
+        Vue.onMounted(load);
+        return {
+          ...Vue.toRefs(state),
+          activeTasks, doneToday, groupedTasks,
+          filterOptions: [
+            { key: "active", text: "全部" },
+            { key: "today", text: "今天" },
+            { key: "future", text: "未来" },
+            { key: "done", text: "完成" }
+          ],
+          createTask, updateTask, toggleDone, postpone, toggleBlocked, removeTask,
+          isOverdue, categoryName,
+          priorityText: Datu.priorityText, priorityColor: Datu.priorityColor, formatDate: Datu.formatDate
+        };
+      }
+    });
+  </script>
+</body>
+</html>

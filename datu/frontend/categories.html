@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>工作分类 · 大土工作台</title>
+  <link rel="stylesheet" href="/datu/assets/app.css">
+</head>
+<body>
+  <div id="app">
+    <app-shell :active="'categories'" :user="user" :categories="navCategories" v-if="loaded">
+      <template #title>工作分类</template>
+      <template #content>
+        <div class="grid two">
+          <div class="card">
+            <h2>新增工作分类</h2>
+            <div class="form-grid">
+              <div class="field"><label>分类名</label><input v-model.trim="form.name" placeholder="例如：系统巡检"></div>
+              <div class="field"><label>状态</label>
+                <select v-model="form.status">
+                  <option value="normal">正常</option>
+                  <option value="attention">需关注</option>
+                  <option value="stuck">卡住</option>
+                </select>
+              </div>
+              <div class="field full"><label>内容说明</label><textarea v-model="form.description" placeholder="这个分类负责什么？"></textarea></div>
+            </div>
+            <div class="form-actions"><button class="btn primary" @click="createCategory">保存分类</button></div>
+          </div>
+
+          <div class="card">
+            <h2>任务完成报表</h2>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>分类</th><th>状态</th><th>完成</th><th>总数</th><th>进度</th></tr></thead>
+                <tbody>
+                  <tr v-for="category in categories" :key="category.id">
+                    <td>{{ category.name }}</td>
+                    <td><span class="tag" :class="statusClass(category.status)">{{ statusText[category.status] || category.status }}</span></td>
+                    <td>{{ category.done_count }}</td>
+                    <td>{{ category.total_count }}</td>
+                    <td style="min-width:120px"><div class="progress"><i :style="{ width: percent(category) + '%' }"></i></div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="!categories.length" class="empty">暂无分类</div>
+          </div>
+
+          <div class="card" style="grid-column:1/-1">
+            <div class="section-head"><h2>分类列表</h2><span>{{ categories.length }} 个</span></div>
+            <div class="list">
+              <article v-for="category in categories" :key="category.id" class="item">
+                <div class="item-top">
+                  <div>
+                    <div class="item-title">{{ category.name }}</div>
+                    <div class="meta">
+                      <span class="tag" :class="statusClass(category.status)">{{ statusText[category.status] || category.status }}</span>
+                      <span>{{ category.done_count }}/{{ category.total_count }} 完成</span>
+                    </div>
+                    <div class="progress" style="margin-top:10px"><i :style="{ width: percent(category) + '%' }"></i></div>
+                    <p style="margin:10px 0 0;color:var(--muted);white-space:pre-wrap">{{ category.description || '未填写说明' }}</p>
+                  </div>
+                  <button class="btn small danger" @click="removeCategory(category)">删除</button>
+                </div>
+                <div style="margin-top:10px">
+                  <select :value="category.status" @change="updateCategory(category, { status: $event.target.value })">
+                    <option value="normal">正常</option>
+                    <option value="attention">需关注</option>
+                    <option value="stuck">卡住</option>
+                  </select>
+                </div>
+              </article>
+            </div>
+            <div v-if="!categories.length" class="empty">暂无分类</div>
+          </div>
+        </div>
+      </template>
+    </app-shell>
+  </div>
+  <script src="/datu/vendor/vue.global.prod.js"></script>
+  <script src="/datu/assets/app.js"></script>
+  <script>
+    Datu.mountPage({
+      active: "categories",
+      setup() {
+        const state = Vue.reactive({ categories: [], form: { name: "", description: "", status: "normal" } });
+        async function load() {
+          const workspace = await Datu.request("/datu/api/workspace");
+          state.categories = workspace.categories || [];
+        }
+        async function refresh() { await load(); Datu.showToast("已保存"); }
+        async function createCategory() {
+          if (!state.form.name) return;
+          await Datu.request("/datu/api/categories", "POST", state.form);
+          state.form = { name: "", description: "", status: "normal" };
+          await refresh();
+        }
+        async function updateCategory(category, patch) { await Datu.request(`/datu/api/categories/${category.id}`, "PUT", patch); await refresh(); }
+        async function removeCategory(category) { if (!confirm("确认删除？")) return; await Datu.request(`/datu/api/categories/${category.id}`, "DELETE"); await refresh(); }
+        function percent(category) { return category.total_count ? Math.round(category.done_count * 100 / category.total_count) : 0; }
+        function statusClass(status) { return status === "stuck" ? "red" : status === "attention" ? "amber" : "blue"; }
+
+        Vue.onMounted(load);
+        return { ...Vue.toRefs(state), createCategory, updateCategory, removeCategory, percent, statusClass, statusText: Datu.statusText };
+      }
+    });
+  </script>
+</body>
+</html>

@@ -112,13 +112,26 @@ class Database:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL DEFAULT '',
+            due_date TEXT,
+            status TEXT NOT NULL DEFAULT 'in_progress',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+            goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
             title TEXT NOT NULL,
             priority TEXT NOT NULL DEFAULT 'normal',
             due_date TEXT NOT NULL,
+            content TEXT NOT NULL DEFAULT '',
             blocked INTEGER NOT NULL DEFAULT 0,
             done INTEGER NOT NULL DEFAULT 0,
             postponed_count INTEGER NOT NULL DEFAULT 0,
@@ -165,6 +178,11 @@ class Database:
         """
         with self.connect() as connection:
             connection.executescript(schema)
+            task_columns = {row[1] for row in connection.execute("PRAGMA table_info(tasks)")}
+            if "content" not in task_columns:
+                connection.execute("ALTER TABLE tasks ADD COLUMN content TEXT NOT NULL DEFAULT ''")
+            if "goal_id" not in task_columns:
+                connection.execute("ALTER TABLE tasks ADD COLUMN goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE")
 
     def rollover_tasks(self, user_id: int, today: date | None = None) -> int:
         today = today or date.today()
@@ -325,12 +343,19 @@ def user_payload(user_id: int) -> dict[str, Any]:
             task["overdue"] = not task["done"] and task["due_date"] < today
         ideas = [dict(row) for row in connection.execute(
             "SELECT * FROM ideas WHERE user_id = ? ORDER BY created_at DESC, id DESC", (user_id,))]
+        goals = [dict(row) for row in connection.execute(
+            """
+            SELECT g.*,
+              (SELECT COUNT(*) FROM tasks t WHERE t.goal_id = g.id) AS total_count,
+              (SELECT COUNT(*) FROM tasks t WHERE t.goal_id = g.id AND t.done = 1) AS done_count
+            FROM goals g WHERE g.user_id = ? ORDER BY g.created_at, g.id
+            """, (user_id,))]
         team_goals = [dict(row) for row in connection.execute(
             "SELECT * FROM team_goals WHERE user_id = ? ORDER BY due_date, id", (user_id,))]
         team_progress = [dict(row) for row in connection.execute(
             "SELECT * FROM team_progress WHERE user_id = ? ORDER BY week_start DESC, id DESC", (user_id,))]
-    return {"today": today, "weekStart": iso_date(monday_of()), "categories": categories, "tasks": tasks,
-            "ideas": ideas, "teamGoals": team_goals, "teamProgress": team_progress}
+    return {"today": today, "weekStart": iso_date(monday_of()), "categories": categories, "goals": goals,
+            "tasks": tasks, "ideas": ideas, "teamGoals": team_goals, "teamProgress": team_progress}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -400,9 +425,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_file(FRONTEND_DIR / "index.html")
             return
         relative = path.lstrip("/")
-        target = (BASE_DIR / relative).resolve()
+        target = (FRONTEND_DIR / relative).resolve()
         try:
-            target.relative_to(BASE_DIR)
+            target.relative_to(FRONTEND_DIR)
         except ValueError:
             self.send_json(403, {"error": "非法路径"})
             return
@@ -515,6 +540,7 @@ class Handler(BaseHTTPRequestHandler):
         route = {
             "/api/tasks": self.create_task,
             "/api/categories": self.create_category,
+            "/api/goals": self.create_goal,
             "/api/ideas": self.create_idea,
             "/api/team-goals": self.create_team_goal,
             "/api/team-progress": self.create_team_progress,
@@ -535,13 +561,19 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("截止日期无效")
         priority = clean_text(body.get("priority"), 50) or "normal"
         category_id = int(body["categoryId"]) if body.get("categoryId") not in (None, "", 0) else None
+        goal_id = int(body["goalId"]) if body.get("goalId") not in (None, "", 0) else None
         with self.database.connect() as connection:
+            if goal_id:
+                goal = connection.execute("SELECT category_id FROM goals WHERE id=? AND user_id=?", (goal_id, user_id)).fetchone()
+                if goal is None:
+                    raise ValueError("任务目标不存在")
+                category_id = int(goal["category_id"])
             cursor = connection.execute(
                 """
-                INSERT INTO tasks(user_id,category_id,title,priority,due_date,blocked,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?)
+                INSERT INTO tasks(user_id,category_id,goal_id,title,priority,due_date,content,blocked,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?)
                 """,
-                (user_id, category_id, title, priority, iso_date(due), 1 if body.get("blocked") else 0, now, now),
+                (user_id, category_id, goal_id, title, priority, iso_date(due), clean_text(body.get("content"), 20000), 1 if body.get("blocked") else 0, now, now),
             )
             return {"id": int(cursor.lastrowid)}
 
@@ -553,6 +585,25 @@ class Handler(BaseHTTPRequestHandler):
             cursor = connection.execute(
                 "INSERT INTO categories(user_id,name,description,status,created_at,updated_at) VALUES(?,?,?,?,?,?)",
                 (user_id, name, clean_text(body.get("description"), 5000), clean_text(body.get("status"), 30) or "normal", now, now),
+            )
+            return {"id": int(cursor.lastrowid)}
+
+    def create_goal(self, user_id: int, body: dict[str, Any], now: str) -> dict[str, Any]:
+        title = clean_text(body.get("title"), 300)
+        if not title:
+            raise ValueError("目标名称不能为空")
+        category_id = int(body.get("categoryId") or 0)
+        if category_id <= 0:
+            raise ValueError("请选择工作分类")
+        due = to_date(body.get("dueDate"))
+        with self.database.connect() as connection:
+            exists = connection.execute("SELECT 1 FROM categories WHERE id=? AND user_id=?", (category_id, user_id)).fetchone()
+            if not exists:
+                raise ValueError("工作分类不存在")
+            cursor = connection.execute(
+                "INSERT INTO goals(user_id,category_id,title,content,due_date,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+                (user_id, category_id, title, clean_text(body.get("content"), 20000), iso_date(due) if due else None,
+                 clean_text(body.get("status"), 30) or "in_progress", now, now),
             )
             return {"id": int(cursor.lastrowid)}
 
@@ -608,7 +659,7 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) != 4 or parts[1] != "api":
             self.send_json(404, {"error": "接口不存在"})
             return
-        table = {"tasks": "tasks", "categories": "categories", "ideas": "ideas",
+        table = {"tasks": "tasks", "categories": "categories", "goals": "goals", "ideas": "ideas",
                  "team-goals": "team_goals", "team-progress": "team_progress"}.get(parts[2])
         if table is None:
             self.send_json(404, {"error": "接口不存在"})
@@ -633,7 +684,7 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) != 4 or parts[1] != "api":
             self.send_json(404, {"error": "接口不存在"})
             return
-        table = {"tasks": "tasks", "categories": "categories", "ideas": "ideas",
+        table = {"tasks": "tasks", "categories": "categories", "goals": "goals", "ideas": "ideas",
                  "team-goals": "team_goals", "team-progress": "team_progress"}.get(parts[2])
         if table is None:
             self.send_json(404, {"error": "接口不存在"})
@@ -665,6 +716,10 @@ def normalize_update(table: str, body: dict[str, Any]) -> dict[str, Any]:
             updates["due_date"] = iso_date(due)
         if "categoryId" in body:
             updates["category_id"] = int(body["categoryId"]) if body["categoryId"] not in (None, "", 0) else None
+        if "goalId" in body:
+            updates["goal_id"] = int(body["goalId"]) if body["goalId"] not in (None, "", 0) else None
+        if "content" in body:
+            updates["content"] = clean_text(body["content"], 20000)
         if "blocked" in body:
             updates["blocked"] = 1 if body["blocked"] else 0
         if "done" in body:
@@ -693,6 +748,19 @@ def normalize_update(table: str, body: dict[str, Any]) -> dict[str, Any]:
             updates["content"] = content
         if "tags" in body:
             updates["tags"] = clean_text(body["tags"], 500)
+    elif table == "goals":
+        if "title" in body:
+            title = clean_text(body["title"], 300)
+            if not title:
+                raise ValueError("目标名称不能为空")
+            updates["title"] = title
+        if "content" in body:
+            updates["content"] = clean_text(body["content"], 20000)
+        if "status" in body:
+            updates["status"] = clean_text(body["status"], 30) or "in_progress"
+        if "dueDate" in body:
+            due = to_date(body["dueDate"])
+            updates["due_date"] = iso_date(due) if due else None
     elif table == "team_goals":
         if "title" in body:
             title = clean_text(body["title"], 300)
@@ -726,7 +794,7 @@ def normalize_update(table: str, body: dict[str, Any]) -> dict[str, Any]:
 
 def clear_examples(user_id: int) -> None:
     with get_database().connect() as connection:
-        for table in ("team_progress", "team_goals", "ideas", "tasks", "categories"):
+        for table in ("team_progress", "team_goals", "ideas", "tasks", "goals", "categories"):
             connection.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
 
 
