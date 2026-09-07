@@ -41,7 +41,7 @@ const priorityColor={urgent_important:"#d43f4c",important_not_urgent:"#147c9e",u
 const statusText={normal:"正常",attention:"需关注",stuck:"卡住",not_started:"未开始",in_progress:"进行中",completed:"已完成",done:"已完成",blocked:"卡住"};
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function fmtDate(v){if(!v)return"";const d=new Date(v+"T00:00:00");return `${d.getMonth()+1}月${d.getDate()}日`}
-async function api(path,method="GET",body){const res=await fetch(path,{method,headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined});if(res.status===401){showLogin();throw new Error("登录已过期")}const data=await res.clone().json().catch(()=>({}));if(!res.ok)throw new Error(data.error||"请求失败");return data}
+async function api(path,method="GET",body){const res=await fetch(path,{method,headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined});if(res.status===401 && !path.includes("/api/login")){showLogin();throw new Error("登录已过期")}const data=await res.clone().json().catch(()=>({}));if(!res.ok)throw new Error(data.error||"请求失败");return data}
 function toast(msg,error=false){const t=document.getElementById("toast");t.textContent=msg;t.classList.toggle("hidden",false);t.style.background=error?"#a0313c":"#172b31";clearTimeout(t._timer);t._timer=setTimeout(()=>t.classList.add("hidden"),2600)}
 async function safe(fn,message){try{await fn()}catch(e){toast(e.message||message,true)}}
 function showLogin(){document.getElementById("app").classList.add("hidden");document.getElementById("loginView").classList.remove("hidden");document.getElementById("loading").classList.add("hidden")}
