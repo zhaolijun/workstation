@@ -1,0 +1,18 @@
+﻿[Unit]
+Description=DATU Workbench Backend
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/datu
+Environment=DATU_DB=/opt/datu/data/datu.db
+Environment=DATU_ADMIN_USER=ops
+Environment=DATU_ADMIN_PASSWORD=change-this-password
+ExecStart=/usr/bin/python3 /opt/datu/backend/server.py --host 127.0.0.1 --port 8800
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
