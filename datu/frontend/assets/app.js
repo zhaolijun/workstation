@@ -76,8 +76,7 @@
     data() {
       const today = this.workspace ? this.workspace.today : new Date().toISOString().slice(0, 10);
       return {
-        form: { title: "", content: "", priority: "important_not_urgent", dueDate: today, projectId: "", teamGoalId: "", blocked: false },
-        expanded: null,
+        form: { title: "", content: "", priority: "important_not_urgent", dueDate: today, projectId: "", teamGoalId: "", taskStatus: "pending" },
         source: "all"
       };
     },
@@ -91,6 +90,7 @@
     },
     computed: {
       sourceTabs() { return [{ key: "all", label: "全部" }, { key: "manual", label: "手工" }, { key: "team", label: "团队" }, { key: "project", label: "项目" }]; },
+      statusOptions() { return taskStatusOptions; },
       sourceTasks() {
         return this.workspace.tasks.filter(task => {
           if (this.source === "team") return !!task.team_goal_id;
@@ -100,16 +100,8 @@
         });
       },
       currentTasks() { const today = this.workspace.today; return this.sourceTasks.filter(task => !task.done && task.due_date <= today); },
-      futureGroups() {
-        const today = this.workspace.today, result = [];
-        this.sourceTasks.filter(task => !task.done && task.due_date > today).sort((a, b) => a.due_date.localeCompare(b.due_date)).forEach(task => {
-          let group = result.find(row => row.date === task.due_date);
-          if (!group) { group = { date: task.due_date, items: [] }; result.push(group); }
-          group.items.push(task);
-        });
-        return result;
-      },
-      doneTasks() { return this.sourceTasks.filter(task => task.done); },
+      futureTasks() { const today = this.workspace.today; return this.sourceTasks.filter(task => !task.done && task.due_date > today).sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 10); },
+      doneTasks() { return this.sourceTasks.filter(task => task.done).sort((a, b) => (b.completed_at || b.due_date).localeCompare(a.completed_at || a.due_date)).slice(0, 10); },
       completion() {
         const total = this.workspace.tasks.length;
         return total ? Math.round(this.workspace.tasks.filter(item => item.done).length * 100 / total) : 0;
@@ -123,17 +115,16 @@
       },
       projectName(id) { const item = this.workspace.projects.find(row => row.id === id); return item ? item.name : ""; },
       priorityLabel(value) { return priorityText[value] || value; },
+      taskStatusLabel(value) { return taskStatusText[value || "pending"] || value; },
       formatDate(value) { return value ? value.slice(5).replace("-", "月") + "日" : ""; },
-      taskDanger(task) { return (task.taskStatus === "risk") || task.overdue; },
       async create() {
         if (!this.form.title.trim()) return;
         await this.$root.call(BASE + "/api/tasks", "POST", { ...this.form, done: this.form.taskStatus === "completed" });
-        this.form = { title: "", content: "", priority: "important_not_urgent", dueDate: this.workspace.today, projectId: "", teamGoalId: "", blocked: false };
+        this.form = { title: "", content: "", priority: "important_not_urgent", dueDate: this.workspace.today, projectId: "", teamGoalId: "", taskStatus: "pending" };
         localStorage.removeItem("datu.draft.task");
       },
       async toggle(task) { await this.$root.call(BASE + "/api/tasks/" + task.id, "PUT", { done: !task.done }); },
       async postpone(task) { await this.$root.call(BASE + "/api/tasks/" + task.id, "PUT", { postpone: true, postponedCount: task.postponed_count }); },
-      async toggleBlocked(task) { await this.$root.call(BASE + "/api/tasks/" + task.id, "PUT", { blocked: !(task.taskStatus === "risk") }); },
       async remove(task) { if (confirm("删除「" + task.title + "」？")) await this.$root.call(BASE + "/api/tasks/" + task.id, "DELETE"); }
     }
   };
