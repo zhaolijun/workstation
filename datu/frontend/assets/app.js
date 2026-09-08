@@ -15,7 +15,7 @@
     { key: "pending", label: "待排期" }, { key: "in_progress", label: "进行中" }, { key: "risk", label: "风险告警" }, { key: "completed", label: "已完成" }
   ];
   const statusText = {
-    normal: "正常", attention: "需关注", stuck: "风险告警",
+    normal: "正常", attention: "需关注", risk: "风险告警", stuck: "风险告警",
     not_started: "未开始", in_progress: "进行中", completed: "已完成",
     done: "已完成", blocked: "风险告警"
   };
