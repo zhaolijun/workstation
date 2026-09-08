@@ -133,6 +133,7 @@ class Database:
             title TEXT NOT NULL,
             priority TEXT NOT NULL DEFAULT 'normal',
             due_date TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
             content TEXT NOT NULL DEFAULT '',
             blocked INTEGER NOT NULL DEFAULT 0,
             done INTEGER NOT NULL DEFAULT 0,
@@ -212,6 +213,9 @@ class Database:
                 connection.execute("ALTER TABLE tasks ADD COLUMN team_goal_id INTEGER REFERENCES team_goals(id) ON DELETE SET NULL")
             if "goal_id" not in task_columns:
                 connection.execute("ALTER TABLE tasks ADD COLUMN goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE")
+            if "status" not in task_columns:
+                connection.execute("ALTER TABLE tasks ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'")
+                connection.execute("UPDATE tasks SET status = CASE WHEN done = 1 THEN 'completed' WHEN blocked = 1 THEN 'risk' ELSE 'pending' END")
             if "original_due_date" not in task_columns:
                 connection.execute("ALTER TABLE tasks ADD COLUMN original_due_date TEXT")
                 connection.execute("UPDATE tasks SET original_due_date = due_date WHERE original_due_date IS NULL OR original_due_date = ''")
@@ -381,6 +385,7 @@ def normalize_task(row: sqlite3.Row) -> dict[str, Any]:
     return dict(row) | {
         "done": bool(row["done"]),
         "blocked": bool(row["blocked"]),
+        "taskStatus": row["status"] or ("completed" if row["done"] else "risk" if row["blocked"] else "pending"),
         "overdue": False,
     }
 
@@ -653,10 +658,11 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("团队目标不存在")
             cursor = connection.execute(
                 """
-                INSERT INTO tasks(user_id,category_id,goal_id,project_id,team_goal_id,title,priority,due_date,original_due_date,content,blocked,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO tasks(user_id,category_id,goal_id,project_id,team_goal_id,title,priority,due_date,status,original_due_date,content,blocked,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
-                (user_id, category_id, goal_id, project_id, team_goal_id, title, priority, iso_date(due), iso_date(due),
+                (user_id, category_id, goal_id, project_id, team_goal_id, title, priority, iso_date(due),
+                 clean_text(body.get("taskStatus", body.get("status", "risk" if body.get("blocked") else "pending")), 30) or "pending", iso_date(due),
                  clean_text(body.get("content"), 20000), 1 if body.get("blocked") else 0, now, now),
             )
             return {"id": int(cursor.lastrowid)}
@@ -843,9 +849,15 @@ def normalize_update(table: str, body: dict[str, Any]) -> dict[str, Any]:
             updates["team_goal_id"] = int(body["teamGoalId"]) if body["teamGoalId"] not in (None, "", 0) else None
         if "content" in body:
             updates["content"] = clean_text(body["content"], 20000)
+        if "taskStatus" in body:
+            updates["status"] = clean_text(body["taskStatus"], 30) or "pending"
         if "blocked" in body:
             updates["blocked"] = 1 if body["blocked"] else 0
+            if "taskStatus" not in body:
+                updates["status"] = "risk" if body["blocked"] else "in_progress"
         if "done" in body:
+            if "taskStatus" not in body:
+                updates["status"] = "completed" if body["done"] else "in_progress"
             updates["done"] = 1 if body["done"] else 0
             updates["completed_at"] = now if body["done"] else None
         if "postpone" in body and body["postpone"]:

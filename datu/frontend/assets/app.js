@@ -8,15 +8,22 @@
     urgent_not_important: "紧急不重要",
     normal: "常规"
   };
+  const taskStatusText = {
+    pending: "待排期", in_progress: "进行中", risk: "风险告警", completed: "已完成"
+  };
+  const taskStatusOptions = [
+    { key: "pending", label: "待排期" }, { key: "in_progress", label: "进行中" }, { key: "risk", label: "风险告警" }, { key: "completed", label: "已完成" }
+  ];
   const statusText = {
-    normal: "正常", attention: "需关注", stuck: "卡住",
+    normal: "正常", attention: "需关注", stuck: "风险告警",
     not_started: "未开始", in_progress: "进行中", completed: "已完成",
-    done: "已完成", blocked: "卡住"
+    done: "已完成", blocked: "风险告警"
   };
   const menu = [
     { path: "/tasks", label: "今天待办", icon: "M4 12l5 5 11-11" },
     { path: "/team", label: "团队建设", icon: "M8 11a3 3 0 100-6 3 3 0 000 6zm8 0a3 3 0 100-6 3 3 0 000 6zM2 20c0-3.3 2.7-6 6-6s6 2.7 6 6m2-6c3.3 0 6 2.7 6 6" },
     { path: "/projects", label: "项目管理", icon: "M3 7h7l2 2h9v10H3z" },
+    { path: "/history", label: "历史任务", icon: "M3 5h18M3 12h18M3 19h18" },
     { path: "/review", label: "每周复盘", icon: "M5 20V10m7 10V4m7 16v-7" },
     { path: "/ideas", label: "灵感速记", icon: "M12 3a6 6 0 013 11v3H9v-3a6 6 0 013-11zM9 21h6" }
   ];
@@ -117,16 +124,16 @@
       projectName(id) { const item = this.workspace.projects.find(row => row.id === id); return item ? item.name : ""; },
       priorityLabel(value) { return priorityText[value] || value; },
       formatDate(value) { return value ? value.slice(5).replace("-", "月") + "日" : ""; },
-      taskDanger(task) { return task.blocked || task.overdue; },
+      taskDanger(task) { return (task.taskStatus === "risk") || task.overdue; },
       async create() {
         if (!this.form.title.trim()) return;
-        await this.$root.call(BASE + "/api/tasks", "POST", { ...this.form });
+        await this.$root.call(BASE + "/api/tasks", "POST", { ...this.form, done: this.form.taskStatus === "completed" });
         this.form = { title: "", content: "", priority: "important_not_urgent", dueDate: this.workspace.today, projectId: "", teamGoalId: "", blocked: false };
         localStorage.removeItem("datu.draft.task");
       },
       async toggle(task) { await this.$root.call(BASE + "/api/tasks/" + task.id, "PUT", { done: !task.done }); },
       async postpone(task) { await this.$root.call(BASE + "/api/tasks/" + task.id, "PUT", { postpone: true, postponedCount: task.postponed_count }); },
-      async toggleBlocked(task) { await this.$root.call(BASE + "/api/tasks/" + task.id, "PUT", { blocked: !task.blocked }); },
+      async toggleBlocked(task) { await this.$root.call(BASE + "/api/tasks/" + task.id, "PUT", { blocked: !(task.taskStatus === "risk") }); },
       async remove(task) { if (confirm("删除「" + task.title + "」？")) await this.$root.call(BASE + "/api/tasks/" + task.id, "DELETE"); }
     }
   };
@@ -177,7 +184,7 @@
             <div class="panel-head"><h2>{{ editingId ? "编辑项目" : "新建项目" }}</h2><button v-if="editingId" class="link" @click="resetProject">切换为新建</button></div>
             <form class="form-grid" @submit.prevent="save">
               <label>项目名称<input v-model.trim="project.name" required></label>
-              <label>状态<select v-model="project.status"><option value="not_started">未开始</option><option value="in_progress">进行中</option><option value="stuck">卡住</option><option value="completed">已完成</option></select></label>
+              <label>状态<select v-model="project.status"><option value="not_started">未开始</option><option value="in_progress">进行中</option><option value="risk">风险告警</option><option value="completed">已完成</option></select></label>
               <label>开始日期<input v-model="project.startDate" type="date"></label>
               <label>目标完成<input v-model="project.dueDate" type="date"></label>
               <label class="span-2">项目介绍<textarea v-model="project.description" rows="4" placeholder="背景、目标、关键结果"></textarea></label>
@@ -204,9 +211,9 @@
           </form>
           <div class="rich-margin"><div class="field-label">任务说明</div><rich-editor v-model="task.content"></rich-editor></div>
           <div v-if="!projectTasks.length" class="empty">这个项目还没有任务</div>
-          <div v-for="task in projectTasks" :key="task.id" class="task" :class="{ done: task.done, red: task.blocked && !task.done }">
+          <div v-for="task in projectTasks" :key="task.id" class="task" :class="{ done: task.done, red: (task.taskStatus === "risk") && !task.done }">
             <button class="check-btn" :class="{ on: task.done }" @click="toggle(task)">✓</button>
-            <div class="task-body"><div class="task-title">{{ task.title }}</div><div class="task-meta"><span class="pill" :data-priority="task.priority">{{ priorityLabel(task.priority) }}</span><span>{{ formatDate(task.due_date) }}</span><span v-if="task.blocked" class="pill red">卡住</span></div></div>
+            <div class="task-body"><div class="task-title">{{ task.title }}</div><div class="task-meta"><span class="pill" :data-priority="task.priority">{{ priorityLabel(task.priority) }}</span><span>{{ formatDate(task.due_date) }}</span><span v-if="(task.taskStatus === "risk")" class="pill red">风险告警</span></div></div>
             <div class="task-actions"><button class="small danger" @click="removeTask(task)">删除</button></div>
           </div>
         </article>
@@ -228,7 +235,7 @@
     computed: {
       currentGoal() { return this.workspace.teamGoals.find(item => item.id === this.goalId) || null; },
       memberStatus() {
-        const result = { normal: 0, attention: 0, stuck: 0 };
+        const result = { normal: 0, attention: 0, risk: 0 };
         this.workspace.teamMembers.forEach(item => { result[item.status] = (result[item.status] || 0) + 1; });
         return result;
       }
@@ -266,7 +273,7 @@
             <form class="form-grid" @submit.prevent="saveGoal">
               <label>目标名称<input v-model.trim="goal.title" required></label>
               <label>周期<select v-model="goal.period"><option value="monthly">月度</option><option value="quarterly">季度</option></select></label>
-              <label>状态<select v-model="goal.status"><option value="in_progress">进行中</option><option value="stuck">卡住</option><option value="completed">已完成</option></select></label>
+              <label>状态<select v-model="goal.status"><option value="in_progress">进行中</option><option value="risk">风险告警</option><option value="completed">已完成</option></select></label>
               <label>完成日期<input v-model="goal.dueDate" type="date"></label>
               <label class="span-2">目标说明<textarea v-model="goal.objectives" rows="3"></textarea></label>
               <label class="span-2">行动计划<textarea v-model="goal.plan" rows="3"></textarea></label>
@@ -290,7 +297,7 @@
             <form class="form-grid" @submit.prevent="saveProgress">
               <label>团队目标<select v-model="progress.goalId" required><option value="">请选择</option><option v-for="goal in workspace.teamGoals" :key="goal.id" :value="goal.id">{{ goal.title }}</option></select></label>
               <label>周开始<input v-model="progress.weekStart" type="date"></label>
-              <label>状态<select v-model="progress.status"><option value="in_progress">进行中</option><option value="completed">已完成</option><option value="stuck">卡住</option></select></label>
+              <label>状态<select v-model="progress.status"><option value="in_progress">进行中</option><option value="completed">已完成</option><option value="risk">风险告警</option></select></label>
               <label class="span-2">完成情况<textarea v-model="progress.result" rows="3"></textarea></label>
               <label class="span-2">卡点<textarea v-model="progress.blockers" rows="2"></textarea></label>
               <button class="btn primary big span-2">保存周记录</button>
@@ -305,7 +312,7 @@
             <div class="panel-head"><h2>人员盘点</h2><span class="muted">{{ workspace.teamMembers.length }} 人</span></div>
             <form class="form-grid compact" @submit.prevent="addMember">
               <label>姓名<input v-model.trim="member.name" required></label><label>角色<input v-model.trim="member.role"></label>
-              <label>状态<select v-model="member.status"><option value="normal">正常</option><option value="attention">需关注</option><option value="stuck">卡住</option></select></label>
+              <label>状态<select v-model="member.status"><option value="normal">正常</option><option value="attention">需关注</option><option value="risk">风险告警</option></select></label>
               <label class="span-2">优势<textarea v-model="member.strengths" rows="2"></textarea></label>
               <label class="span-2">风险<textarea v-model="member.risks" rows="2"></textarea></label>
               <button class="btn primary">添加成员</button>
@@ -313,7 +320,7 @@
             <div class="bar-list">
               <div class="bar-row"><span>正常</span><div><i :style="{ width: (memberStatus.normal || 0) * 20 + '%' }"></i></div><b>{{ memberStatus.normal || 0 }}</b></div>
               <div class="bar-row"><span>需关注</span><div><i style="background:#c77618" :style="{ width: (memberStatus.attention || 0) * 20 + '%' }"></i></div><b>{{ memberStatus.attention || 0 }}</b></div>
-              <div class="bar-row"><span>卡住</span><div><i style="background:#d43f4c" :style="{ width: (memberStatus.stuck || 0) * 20 + '%' }"></i></div><b>{{ memberStatus.stuck || 0 }}</b></div>
+              <div class="bar-row"><span>风险告警</span><div><i style="background:#d43f4c" :style="{ width: (memberStatus.risk || 0) * 20 + '%' }"></i></div><b>{{ memberStatus.risk || 0 }}</b></div>
             </div>
             <div v-for="member in workspace.teamMembers" :key="member.id" class="member-card">
               <div class="row-head"><strong>{{ member.name }}</strong><span class="pill" :class="member.status">{{ statusLabel(member.status) }}</span></div>
@@ -347,8 +354,8 @@
         return [...map.entries()].map(([name, count]) => ({ name, count }));
       },
       blockers() {
-        const tasks = this.workspace.tasks.filter(item => !item.done && item.blocked).map(item => ({ title: item.title, detail: "任务已标记卡住", due: item.due_date }));
-        const projects = this.workspace.projects.filter(item => item.status === "stuck").map(item => ({ title: item.name, detail: item.description || "项目卡住", due: item.due_date }));
+        const tasks = this.workspace.tasks.filter(item => !item.done && (item.taskStatus === "risk")).map(item => ({ title: item.title, detail: "任务已标记风险告警", due: item.due_date }));
+        const projects = this.workspace.projects.filter(item => item.status === "risk").map(item => ({ title: item.name, detail: item.description || "项目风险告警", due: item.due_date }));
         const team = this.workspace.teamProgress.filter(item => item.blockers).map(item => ({ title: item.week_start + " 周记录", detail: item.blockers, due: item.week_start }));
         return [...tasks, ...projects, ...team];
       },
@@ -412,6 +419,7 @@
       { path: "/tasks", component: TasksPage },
       { path: "/team", component: TeamPage },
       { path: "/projects", component: ProjectsPage },
+      { path: "/history", component: HistoryPage },
       { path: "/review", component: ReviewPage },
       { path: "/ideas", component: IdeasPage },
       { path: "/:pathMatch(.*)*", redirect: "/tasks" }
@@ -432,10 +440,10 @@
         if (!this.workspace) return [];
         const today = this.workspace.today, list = [];
         this.workspace.tasks.forEach(task => {
-          if (!task.done && (task.blocked || task.due_date <= today)) list.push({ type: "任务", title: task.title, detail: task.blocked ? "任务卡住" : "已逾期或今天到期", danger: task.blocked || task.due_date < today });
+          if (!task.done && ((task.taskStatus === "risk") || task.due_date <= today)) list.push({ type: "任务", title: task.title, detail: (task.taskStatus === "risk") ? "任务风险告警" : "已逾期或今天到期", danger: (task.taskStatus === "risk") || task.due_date < today });
         });
-        this.workspace.projects.forEach(project => { if (project.status === "stuck") list.push({ type: "项目", title: project.name, detail: project.description || "项目卡住", danger: true }); });
-        this.workspace.teamGoals.forEach(goal => { if (goal.status === "stuck") list.push({ type: "团队目标", title: goal.title, detail: "目标卡住", danger: true }); });
+        this.workspace.projects.forEach(project => { if (project.status === "risk") list.push({ type: "项目", title: project.name, detail: project.description || "项目风险告警", danger: true }); });
+        this.workspace.teamGoals.forEach(goal => { if (goal.status === "risk") list.push({ type: "团队目标", title: goal.title, detail: "目标风险告警", danger: true }); });
         return list.sort((a, b) => Number(b.danger) - Number(a.danger)).slice(0, 6);
       },
       routeTitle() { const item = this.menu.find(row => row.path === this.$route.path); return item ? item.label : "大土工作台"; }
