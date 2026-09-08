@@ -249,9 +249,9 @@
           </form>
           <div class="rich-margin"><div class="field-label">任务说明</div><rich-editor v-model="task.content"></rich-editor></div>
           <div v-if="!projectTasks.length" class="empty">这个项目还没有任务</div>
-          <div v-for="task in projectTasks" :key="task.id" class="task" :class="{ done: task.done, red: (task.taskStatus === "risk") && !task.done }">
+          <div v-for="task in projectTasks" :key="task.id" class="task" :class="{ done: task.done, risk: task.taskStatus === 'risk' && !task.done }">
             <button class="check-btn" :class="{ on: task.done }" @click="toggle(task)">✓</button>
-            <div class="task-body"><div class="task-title">{{ task.title }}</div><div class="task-meta"><span class="pill" :data-priority="task.priority">{{ priorityLabel(task.priority) }}</span><span>{{ formatDate(task.due_date) }}</span><span v-if="(task.taskStatus === "risk")" class="pill red">风险告警</span></div></div>
+            <div class="task-body"><div class="task-title">{{ task.title }}</div><div class="task-meta"><span class="pill" :data-priority="task.priority">{{ priorityLabel(task.priority) }}</span><span>{{ formatDate(task.due_date) }}</span><span v-if="task.taskStatus === 'risk'" class="pill red">风险告警</span></div></div>
             <div class="task-actions"><button class="small danger" @click="removeTask(task)">删除</button></div>
           </div>
         </article>
