@@ -138,6 +138,53 @@
     }
   };
 
+  const HistoryPage = {
+    components: { RichEditor },
+    props: ["workspace"],
+    template: "#history-page-template",
+    data() {
+      return {
+        keyword: "",
+        status: "all",
+        drawer: null,
+        editForm: { id: null, title: "", content: "", priority: "important_not_urgent", dueDate: "", projectId: "", teamGoalId: "", taskStatus: "pending" }
+      };
+    },
+    computed: {
+      statusOptions() { return [{ key: "all", label: "全部状态" }, ...taskStatusOptions]; },
+      filteredTasks() {
+        const keyword = this.keyword.trim().toLowerCase();
+        return this.workspace.tasks.filter(task => {
+          if (this.status !== "all" && (task.taskStatus || "pending") !== this.status) return false;
+          if (!keyword) return true;
+          const project = this.projectName(task.project_id);
+          const goal = this.goalName(task.team_goal_id);
+          return [task.title, task.content, project, goal].join(" ").toLowerCase().includes(keyword);
+        });
+      }
+    },
+    methods: {
+      projectName(id) { const item = this.workspace.projects.find(row => row.id === id); return item ? item.name : ""; },
+      goalName(id) { const item = this.workspace.teamGoals.find(row => row.id === id); return item ? item.title : ""; },
+      priorityLabel(value) { return priorityText[value] || value; },
+      taskStatusLabel(value) { return taskStatusText[value || "pending"] || value; },
+      sourceLabel(task) { return task.team_goal_id ? "团队" : task.project_id ? "项目" : "手工"; },
+      formatDate(value) { return value ? value.slice(5).replace("-", "月") + "日" : ""; },
+      openDetail(task) { this.drawer = { mode: "detail", task }; },
+      edit(task) {
+        this.editForm = { id: task.id, title: task.title, content: task.content || "", priority: task.priority, dueDate: task.due_date, projectId: task.project_id || "", teamGoalId: task.team_goal_id || "", taskStatus: task.taskStatus || "pending" };
+        this.drawer = { mode: "edit", task };
+      },
+      closeDrawer() { this.drawer = null; },
+      async saveEdit() {
+        if (!this.editForm.title.trim()) return;
+        await this.$root.call(BASE + "/api/tasks/" + this.editForm.id, "PUT", { ...this.editForm, id: undefined, done: this.editForm.taskStatus === "completed" });
+        this.closeDrawer();
+      },
+      async remove(task) { if (confirm("删除「" + task.title + "」？")) await this.$root.call(BASE + "/api/tasks/" + task.id, "DELETE"); }
+    }
+  };
+
   const ProjectsPage = {
     components: { RichEditor },
     props: ["workspace"],
