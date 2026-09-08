@@ -5,3 +5,7 @@ data/
 *.db-wal
 *.db-shm
 .env
+.npm-cache/
+backend.patch
+frontend/
+frontend-vue/

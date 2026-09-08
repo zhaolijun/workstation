@@ -2,3 +2,12 @@ node_modules/
 *.log
 .env
 data/
+
+.npm-cache/
+backend.patch
+frontend/
+frontend-vue/
+
+*.db
+*.db-wal
+*.db-shm

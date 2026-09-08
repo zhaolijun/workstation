@@ -128,6 +128,8 @@ class Database:
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
             goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
+            project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+            team_goal_id INTEGER REFERENCES team_goals(id) ON DELETE SET NULL,
             title TEXT NOT NULL,
             priority TEXT NOT NULL DEFAULT 'normal',
             due_date TEXT NOT NULL,
@@ -136,6 +138,28 @@ class Database:
             done INTEGER NOT NULL DEFAULT 0,
             postponed_count INTEGER NOT NULL DEFAULT 0,
             completed_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'in_progress',
+            start_date TEXT,
+            due_date TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS team_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'normal',
+            strengths TEXT NOT NULL DEFAULT '',
+            risks TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -181,6 +205,10 @@ class Database:
             task_columns = {row[1] for row in connection.execute("PRAGMA table_info(tasks)")}
             if "content" not in task_columns:
                 connection.execute("ALTER TABLE tasks ADD COLUMN content TEXT NOT NULL DEFAULT ''")
+            if "project_id" not in task_columns:
+                connection.execute("ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL")
+            if "team_goal_id" not in task_columns:
+                connection.execute("ALTER TABLE tasks ADD COLUMN team_goal_id INTEGER REFERENCES team_goals(id) ON DELETE SET NULL")
             if "goal_id" not in task_columns:
                 connection.execute("ALTER TABLE tasks ADD COLUMN goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE")
 
@@ -297,6 +325,33 @@ def seed_user_data(user_id: int) -> None:
         )
 
 
+        projects = [
+            ("监控系统治理", "统一告警阈值、降噪规则和值班视图，提升故障发现效率。", "in_progress", iso_date(today - timedelta(days=12)), iso_date(today + timedelta(days=20))),
+            ("备份恢复演练", "验证核心数据库和对象存储恢复链路，形成季度演练报告。", "in_progress", iso_date(today - timedelta(days=5)), iso_date(today + timedelta(days=35))),
+        ]
+        for name, description, status, start, due in projects:
+            connection.execute(
+                "INSERT INTO projects(user_id,name,description,status,start_date,due_date,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+                (user_id, name, description, status, start, due, now, now),
+            )
+        connection.execute(
+            """
+            UPDATE tasks SET project_id = CASE
+                WHEN title LIKE '%监控%' OR title LIKE '%告警%' THEN (SELECT id FROM projects WHERE name = '监控系统治理')
+                WHEN title LIKE '%备份%' THEN (SELECT id FROM projects WHERE name = '备份恢复演练')
+                ELSE project_id
+            END WHERE user_id = ?
+            """, (user_id,))
+        members = [
+            ("李明", "值班工程师", "normal", "Linux 排障熟练，善于沉淀手册。", "希望加强数据库深水区能力。"),
+            ("王强", "网络运维", "attention", "网络链路分析能力强。", "近期值班负荷较高，需要轮换。"),
+            ("赵云", "平台运维", "normal", "自动化开发能力突出。", "文档输出节奏可以再提升。"),
+        ]
+        for name, role, status, strengths, risks in members:
+            connection.execute(
+                "INSERT INTO team_members(user_id,name,role,status,strengths,risks,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+                (user_id, name, role, status, strengths, risks, now, now),
+            )
 def auth_user(connection: sqlite3.Connection, token: str | None) -> sqlite3.Row | None:
     if not token:
         return None
@@ -350,12 +405,27 @@ def user_payload(user_id: int) -> dict[str, Any]:
               (SELECT COUNT(*) FROM tasks t WHERE t.goal_id = g.id AND t.done = 1) AS done_count
             FROM goals g WHERE g.user_id = ? ORDER BY g.created_at, g.id
             """, (user_id,))]
+        projects = [dict(row) for row in connection.execute(
+            """
+            SELECT p.*,
+              (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) AS total_count,
+              (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.done = 1) AS done_count
+            FROM projects p WHERE p.user_id = ? ORDER BY p.created_at, p.id
+            """, (user_id,))]
         team_goals = [dict(row) for row in connection.execute(
-            "SELECT * FROM team_goals WHERE user_id = ? ORDER BY due_date, id", (user_id,))]
+            """
+            SELECT g.*,
+              (SELECT COUNT(*) FROM tasks t WHERE t.team_goal_id = g.id) AS total_count,
+              (SELECT COUNT(*) FROM tasks t WHERE t.team_goal_id = g.id AND t.done = 1) AS done_count
+            FROM team_goals g WHERE g.user_id = ? ORDER BY g.due_date, g.id
+            """, (user_id,))]
         team_progress = [dict(row) for row in connection.execute(
             "SELECT * FROM team_progress WHERE user_id = ? ORDER BY week_start DESC, id DESC", (user_id,))]
+        team_members = [dict(row) for row in connection.execute(
+            "SELECT * FROM team_members WHERE user_id = ? ORDER BY name COLLATE NOCASE, id", (user_id,))]
     return {"today": today, "weekStart": iso_date(monday_of()), "categories": categories, "goals": goals,
-            "tasks": tasks, "ideas": ideas, "teamGoals": team_goals, "teamProgress": team_progress}
+            "projects": projects, "tasks": tasks, "ideas": ideas, "teamGoals": team_goals,
+            "teamProgress": team_progress, "teamMembers": team_members}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -541,6 +611,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/tasks": self.create_task,
             "/api/categories": self.create_category,
             "/api/goals": self.create_goal,
+            "/api/projects": self.create_project,
+            "/api/team-members": self.create_team_member,
             "/api/ideas": self.create_idea,
             "/api/team-goals": self.create_team_goal,
             "/api/team-progress": self.create_team_progress,
@@ -562,18 +634,25 @@ class Handler(BaseHTTPRequestHandler):
         priority = clean_text(body.get("priority"), 50) or "normal"
         category_id = int(body["categoryId"]) if body.get("categoryId") not in (None, "", 0) else None
         goal_id = int(body["goalId"]) if body.get("goalId") not in (None, "", 0) else None
+        project_id = int(body["projectId"]) if body.get("projectId") not in (None, "", 0) else None
+        team_goal_id = int(body["teamGoalId"]) if body.get("teamGoalId") not in (None, "", 0) else None
         with self.database.connect() as connection:
             if goal_id:
                 goal = connection.execute("SELECT category_id FROM goals WHERE id=? AND user_id=?", (goal_id, user_id)).fetchone()
                 if goal is None:
                     raise ValueError("任务目标不存在")
                 category_id = int(goal["category_id"])
+            if project_id and connection.execute("SELECT 1 FROM projects WHERE id=? AND user_id=?", (project_id, user_id)).fetchone() is None:
+                raise ValueError("项目不存在")
+            if team_goal_id and connection.execute("SELECT 1 FROM team_goals WHERE id=? AND user_id=?", (team_goal_id, user_id)).fetchone() is None:
+                raise ValueError("团队目标不存在")
             cursor = connection.execute(
                 """
-                INSERT INTO tasks(user_id,category_id,goal_id,title,priority,due_date,content,blocked,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO tasks(user_id,category_id,goal_id,project_id,team_goal_id,title,priority,due_date,content,blocked,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
-                (user_id, category_id, goal_id, title, priority, iso_date(due), clean_text(body.get("content"), 20000), 1 if body.get("blocked") else 0, now, now),
+                (user_id, category_id, goal_id, project_id, team_goal_id, title, priority, iso_date(due),
+                 clean_text(body.get("content"), 20000), 1 if body.get("blocked") else 0, now, now),
             )
             return {"id": int(cursor.lastrowid)}
 
@@ -604,6 +683,39 @@ class Handler(BaseHTTPRequestHandler):
                 "INSERT INTO goals(user_id,category_id,title,content,due_date,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
                 (user_id, category_id, title, clean_text(body.get("content"), 20000), iso_date(due) if due else None,
                  clean_text(body.get("status"), 30) or "in_progress", now, now),
+            )
+            return {"id": int(cursor.lastrowid)}
+
+    def create_project(self, user_id: int, body: dict[str, Any], now: str) -> dict[str, Any]:
+        name = clean_text(body.get("name"), 200)
+        if not name:
+            raise ValueError("项目名称不能为空")
+        start = to_date(body.get("startDate"))
+        due = to_date(body.get("dueDate"))
+        with self.database.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO projects(user_id,name,description,status,start_date,due_date,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (user_id, name, clean_text(body.get("description"), 5000),
+                 clean_text(body.get("status"), 30) or "in_progress", iso_date(start) if start else None,
+                 iso_date(due) if due else None, now, now),
+            )
+            return {"id": int(cursor.lastrowid)}
+
+    def create_team_member(self, user_id: int, body: dict[str, Any], now: str) -> dict[str, Any]:
+        name = clean_text(body.get("name"), 120)
+        if not name:
+            raise ValueError("成员姓名不能为空")
+        with self.database.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO team_members(user_id,name,role,status,strengths,risks,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (user_id, name, clean_text(body.get("role"), 120), clean_text(body.get("status"), 30) or "normal",
+                 clean_text(body.get("strengths"), 5000), clean_text(body.get("risks"), 5000), now, now),
             )
             return {"id": int(cursor.lastrowid)}
 
@@ -659,7 +771,8 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) != 4 or parts[1] != "api":
             self.send_json(404, {"error": "接口不存在"})
             return
-        table = {"tasks": "tasks", "categories": "categories", "goals": "goals", "ideas": "ideas",
+        table = {"tasks": "tasks", "categories": "categories", "goals": "goals", "projects": "projects",
+                 "team-members": "team_members", "ideas": "ideas",
                  "team-goals": "team_goals", "team-progress": "team_progress"}.get(parts[2])
         if table is None:
             self.send_json(404, {"error": "接口不存在"})
@@ -684,7 +797,8 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) != 4 or parts[1] != "api":
             self.send_json(404, {"error": "接口不存在"})
             return
-        table = {"tasks": "tasks", "categories": "categories", "goals": "goals", "ideas": "ideas",
+        table = {"tasks": "tasks", "categories": "categories", "goals": "goals", "projects": "projects",
+                 "team-members": "team_members", "ideas": "ideas",
                  "team-goals": "team_goals", "team-progress": "team_progress"}.get(parts[2])
         if table is None:
             self.send_json(404, {"error": "接口不存在"})
@@ -718,6 +832,10 @@ def normalize_update(table: str, body: dict[str, Any]) -> dict[str, Any]:
             updates["category_id"] = int(body["categoryId"]) if body["categoryId"] not in (None, "", 0) else None
         if "goalId" in body:
             updates["goal_id"] = int(body["goalId"]) if body["goalId"] not in (None, "", 0) else None
+        if "projectId" in body:
+            updates["project_id"] = int(body["projectId"]) if body["projectId"] not in (None, "", 0) else None
+        if "teamGoalId" in body:
+            updates["team_goal_id"] = int(body["teamGoalId"]) if body["teamGoalId"] not in (None, "", 0) else None
         if "content" in body:
             updates["content"] = clean_text(body["content"], 20000)
         if "blocked" in body:
@@ -761,6 +879,36 @@ def normalize_update(table: str, body: dict[str, Any]) -> dict[str, Any]:
         if "dueDate" in body:
             due = to_date(body["dueDate"])
             updates["due_date"] = iso_date(due) if due else None
+    elif table == "projects":
+        if "name" in body:
+            name = clean_text(body["name"], 200)
+            if not name:
+                raise ValueError("项目名称不能为空")
+            updates["name"] = name
+        if "description" in body:
+            updates["description"] = clean_text(body["description"], 5000)
+        if "status" in body:
+            updates["status"] = clean_text(body["status"], 30) or "in_progress"
+        if "startDate" in body:
+            start = to_date(body["startDate"])
+            updates["start_date"] = iso_date(start) if start else None
+        if "dueDate" in body:
+            due = to_date(body["dueDate"])
+            updates["due_date"] = iso_date(due) if due else None
+    elif table == "team_members":
+        if "name" in body:
+            name = clean_text(body["name"], 120)
+            if not name:
+                raise ValueError("成员姓名不能为空")
+            updates["name"] = name
+        if "role" in body:
+            updates["role"] = clean_text(body["role"], 120)
+        if "status" in body:
+            updates["status"] = clean_text(body["status"], 30) or "normal"
+        if "strengths" in body:
+            updates["strengths"] = clean_text(body["strengths"], 5000)
+        if "risks" in body:
+            updates["risks"] = clean_text(body["risks"], 5000)
     elif table == "team_goals":
         if "title" in body:
             title = clean_text(body["title"], 300)
@@ -794,14 +942,15 @@ def normalize_update(table: str, body: dict[str, Any]) -> dict[str, Any]:
 
 def clear_examples(user_id: int) -> None:
     with get_database().connect() as connection:
-        for table in ("team_progress", "team_goals", "ideas", "tasks", "goals", "categories"):
+        for table in ("team_progress", "team_goals", "team_members", "ideas", "tasks", "goals", "projects", "categories"):
             connection.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
 
 
 def export_backup(connection: sqlite3.Connection, user_id: int) -> dict[str, Any]:
     username = connection.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()
     tables = {}
-    for key, table in (("tasks", "tasks"), ("categories", "categories"), ("ideas", "ideas"),
+    for key, table in (("tasks", "tasks"), ("categories", "categories"), ("goals", "goals"),
+                       ("projects", "projects"), ("teamMembers", "team_members"), ("ideas", "ideas"),
                        ("teamGoals", "team_goals"), ("teamProgress", "team_progress")):
         rows = connection.execute(f"SELECT * FROM {table} WHERE user_id=? ORDER BY id", (user_id,)).fetchall()
         tables[key] = [dict(row) for row in rows]
@@ -813,7 +962,7 @@ def import_backup(user_id: int, data: dict[str, Any]) -> dict[str, Any]:
     now = datetime.now().isoformat(timespec="seconds")
     counts: dict[str, int] = {}
     with get_database().connect() as connection:
-        for table in ("team_progress", "team_goals", "ideas", "tasks", "categories"):
+        for table in ("team_progress", "team_goals", "team_members", "ideas", "tasks", "goals", "projects", "categories"):
             connection.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
         category_map: dict[int, int] = {}
         for row in data.get("categories", []):

@@ -1,59 +1,16 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f8a8d">
   <title>大土工作台</title>
   <link rel="stylesheet" href="/datu/assets/app.css">
 </head>
 <body>
-  <div id="app">
-    <div class="login-page">
-      <form class="login-card" @submit.prevent="login">
-        <div class="brand-mark">土</div>
-        <h1>大土工作台</h1>
-        <p style="color:var(--muted)">日常待办、灵感与工作分类统一管理</p>
-        <div class="field">
-          <label>用户名</label>
-          <input v-model.trim="username" autocomplete="username" required>
-        </div>
-        <div class="field">
-          <label>密码</label>
-          <input v-model="password" type="password" autocomplete="current-password" required>
-        </div>
-        <button class="btn primary" style="width:100%">登录工作台</button>
-        <p class="error">{{ error }}</p>
-      </form>
-    </div>
-  </div>
+  <div id="app"><div class="splash"><div class="brand-mark">土</div><p>正在加载工作台…</p></div></div>
   <script src="/datu/vendor/vue.global.prod.js"></script>
-  <script>
-    Vue.createApp({
-      data() { return { username: "", password: "", error: "" }; },
-      async mounted() {
-        try {
-          await fetch("/datu/api/me");
-          location.href = "/datu/tasks.html";
-        } catch (_) {}
-      },
-      methods: {
-        async login() {
-          this.error = "";
-          try {
-            const response = await fetch("/datu/api/login", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username: this.username, password: this.password })
-            });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.error || "登录失败");
-            location.href = "/datu/tasks.html";
-          } catch (err) {
-            this.error = err.message;
-          }
-        }
-      }
-    }).mount("#app");
-  </script>
+  <script src="/datu/vendor/vue-router.global.prod.js"></script>
+  <script src="/datu/assets/app.js"></script>
 </body>
 </html>
