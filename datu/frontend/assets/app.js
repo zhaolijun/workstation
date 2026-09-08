@@ -35,6 +35,7 @@
         return;
       }
       this.editor = window.wangEditor.createEditor(this.$refs.editor, { html: this.modelValue || "" });
+      window.wangEditor.createToolbar({ editor: this.editor, selector: this.$refs.toolbar });
       this.editor.on("change", () => this.$emit("update:modelValue", this.editor.getHtml()));
     },
     beforeUnmount() { if (this.editor) this.editor.destroy(); },
@@ -54,6 +55,7 @@
           <button type="button" @click="exec('insertUnorderedList')">列表</button>
           <button type="button" class="ghost" @click="clear">清空</button>
         </div>
+        <div v-if="hasWangEditor" ref="toolbar" class="editor-toolbar"></div>
         <div v-if="hasWangEditor" ref="editor" class="editor-box"></div>
         <div v-else ref="fallback" class="rich-body" contenteditable="true" @input="onFallbackInput"></div>
       </div>

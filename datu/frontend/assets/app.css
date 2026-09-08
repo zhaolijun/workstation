@@ -171,7 +171,10 @@ label.check input { width: 20px; height: 20px; }
 .date-group { border: 1px solid #edf4f4; border-radius: 12px; padding: 12px 14px; }
 .date-label { font-weight: 700; color: var(--brand-dark); margin-bottom: 4px; }
 .task-list.compact { max-height: 320px; overflow: auto; }
+.editor-toolbar { background: #f5fafb; border-bottom: 1px solid var(--line); }
+.editor-toolbar .w-e-toolbar { background: transparent !important; }
 .editor-box { min-height: 125px; z-index: 1; }
+.editor-box .w-e-text-container { background: #fff !important; }
 
 .mobile-mask { display: none; }
 .mobile-only { display: none; }
