@@ -27,7 +27,7 @@
         <div class="panel-head"><h2>今日待办</h2><span class="muted">逾期任务自动保留，原始截止日期可追溯</span></div>
         <div class="source-tabs"><button v-for="tab in sourceTabs" :key="tab.key" :class="{ active: source === tab.key }" @click="source = tab.key">{{ tab.label }}</button></div>
         <div class="task-list">
-          <div v-for="task in currentTasks" :key="task.id" class="task" :class="{ done: task.done, risk: (task.taskStatus || "pending") === "risk", overdue: task.overdue }">
+          <div v-for="task in currentTasks" :key="task.id" class="task" :class="{ done: task.done, risk: task.taskStatus === 'risk', overdue: task.overdue }">
             <input type="checkbox" :checked="task.done" @change="toggle(task)">
             <div class="task-body">
               <div class="task-title">{{ task.title }}<span class="pill warn source-pill">{{ sourceLabel(task) }}</span></div>
