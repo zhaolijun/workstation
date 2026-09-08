@@ -1,0 +1,74 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f8a8d">
+  <title>大土工作台</title>
+  <link rel="stylesheet" href="/datu/assets/app.css">
+</head>
+<body>
+  <div id="app"><div class="splash"><div class="brand-mark">土</div><p>正在加载工作台…</p></div></div>
+  <template id="tasks-page-template">
+    <section class="route-view">
+      <div class="overview-row panel">
+        <div class="overview-title"><h2>任务概览</h2><small>实时统计</small></div>
+        <div class="overview-stats">
+          <div class="metric"><small>总任务</small><strong>{{ workspace.tasks.length }}</strong></div>
+          <div class="metric"><small>当前待办</small><strong>{{ currentTasks.length }}</strong></div>
+          <div class="metric danger"><small>逾期</small><strong>{{ workspace.tasks.filter(i => i.overdue).length }}</strong></div>
+          <div class="metric"><small>卡住</small><strong>{{ workspace.tasks.filter(i => i.blocked && !i.done).length }}</strong></div>
+          <div class="metric"><small>已完成</small><strong>{{ workspace.tasks.filter(i => i.done).length }}</strong></div>
+        </div>
+        <div class="overview-chart"><div class="metric"><small>完成率</small><strong>{{ completion }}%</strong></div><div class="progress"><span :style="{ width: completion + '%' }"></span></div></div>
+      </div>
+      <div class="panel today-panel">
+        <div class="panel-head"><h2>今日待办</h2><span class="muted">逾期任务自动保留，原始截止日期可追溯</span></div>
+        <div class="source-tabs"><button v-for="tab in sourceTabs" :key="tab.key" :class="{ active: source === tab.key }" @click="source = tab.key">{{ tab.label }}</button></div>
+        <div class="task-list">
+          <div v-for="task in currentTasks" :key="task.id" class="task" :class="{ done: task.done, danger: taskDanger(task) }">
+            <input type="checkbox" :checked="task.done" @change="toggle(task)">
+            <div class="task-body">
+              <div class="task-title">{{ task.title }}<span class="pill warn source-pill">{{ sourceLabel(task) }}</span></div>
+              <div class="task-meta"><span class="pill" :data-priority="task.priority">{{ priorityLabel(task.priority) }}</span><span>截止 {{ formatDate(task.due_date) }}</span><span v-if="task.overdue && task.original_due_date" class="pill red">原始截止 {{ formatDate(task.original_due_date) }}</span><span v-if="task.project_id">{{ projectName(task.project_id) }}</span><span v-if="goalName(task)">{{ goalName(task) }}</span><span v-if="task.blocked" class="pill red">卡住</span><span v-if="task.postponed_count" class="pill warn">顺延 {{ task.postponed_count }} 次</span></div>
+              <button v-if="task.content" class="link" @click="expanded = expanded === task.id ? null : task.id">{{ expanded === task.id ? "收起详情" : "查看详情" }}</button>
+              <div v-if="expanded === task.id" class="rich-view" v-html="task.content"></div>
+            </div>
+            <div class="task-actions"><button class="small" v-if="!task.done" @click="postpone(task)">顺延</button><button class="small" @click="toggleBlocked(task)">{{ task.blocked ? "解除卡住" : "卡住" }}</button><button class="small danger" @click="remove(task)">删除</button></div>
+          </div>
+          <p v-if="!currentTasks.length" class="empty">当前维度没有待处理任务</p>
+        </div>
+      </div>
+      <article class="panel">
+        <div class="panel-head"><h2>新建任务</h2><span class="muted">输入自动保存草稿</span></div>
+        <form class="form-grid" @submit.prevent="create">
+          <label>任务标题<input v-model.trim="form.title" placeholder="例如：完成巡检报告" required></label>
+          <label>优先级<select v-model="form.priority"><option value="urgent_important">紧急重要</option><option value="important_not_urgent">重要不紧急</option><option value="urgent_not_important">紧急不重要</option><option value="normal">常规</option></select></label>
+          <label>截止日期<input v-model="form.dueDate" type="date" required></label>
+          <label>关联项目<select v-model="form.projectId"><option value="">不关联</option><option v-for="project in workspace.projects" :key="project.id" :value="project.id">{{ project.name }}</option></select></label>
+          <label>团队目标<select v-model="form.teamGoalId"><option value="">不关联</option><option v-for="goal in workspace.teamGoals" :key="goal.id" :value="goal.id">{{ goal.title }}</option></select></label>
+          <label class="check"><input v-model="form.blocked" type="checkbox"><span>标记为卡住</span></label>
+          <div class="span-2"><div class="field-label">任务内容</div><rich-editor v-model="form.content"></rich-editor></div>
+          <button class="btn primary big span-2" type="submit">保存任务</button>
+        </form>
+      </article>
+      <article v-if="futureGroups.length" class="panel wide-panel">
+        <div class="panel-head"><h2>未来任务</h2><span class="muted">按截止日期分组</span></div>
+        <div class="date-groups">
+          <div v-for="group in futureGroups" :key="group.date" class="date-group">
+            <div class="date-label">{{ formatDate(group.date) }}</div>
+            <div class="task-list"><div v-for="task in group.items" :key="task.id" class="task"><input type="checkbox" :checked="task.done" @change="toggle(task)"><div class="task-body"><div class="task-title">{{ task.title }}<span class="pill warn source-pill">{{ sourceLabel(task) }}</span></div><div class="task-meta"><span class="pill" :data-priority="task.priority">{{ priorityLabel(task.priority) }}</span><span v-if="task.project_id">{{ projectName(task.project_id) }}</span><span v-if="goalName(task)">{{ goalName(task) }}</span></div></div><div class="task-actions"><button class="small" @click="toggleBlocked(task)">{{ task.blocked ? "解除卡住" : "卡住" }}</button><button class="small danger" @click="remove(task)">删除</button></div></div></div>
+          </div>
+        </div>
+      </article>
+      <article v-if="doneTasks.length" class="panel wide-panel">
+        <div class="panel-head"><h2>已完成</h2><span class="muted">保留完成记录</span></div>
+        <div class="task-list compact"><div v-for="task in doneTasks" :key="task.id" class="task done"><input type="checkbox" checked @change="toggle(task)"><div class="task-body"><div class="task-title">{{ task.title }}<span class="pill warn source-pill">{{ sourceLabel(task) }}</span></div><div class="task-meta"><span>{{ formatDate(task.due_date) }}</span></div></div><div class="task-actions"><button class="small danger" @click="remove(task)">删除</button></div></div></div>
+      </article>
+    </section>
+  </template>
+  <script src="/datu/vendor/vue.global.prod.js"></script>
+  <script src="/datu/vendor/vue-router.global.prod.js"></script>
+  <script src="/datu/assets/app.js"></script>
+</body>
+</html>

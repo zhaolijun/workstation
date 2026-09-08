@@ -1,0 +1,11 @@
+﻿__pycache__/
+*.pyc
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.local
+.npm-cache/
+backend.patch
+frontend-vue/
